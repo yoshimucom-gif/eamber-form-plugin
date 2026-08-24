@@ -1,0 +1,13 @@
+{
+  "name": "e.Amber お問い合わせフォーム",
+  "version": "1.0.0",
+  "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
+  "requires": "5.8",
+  "tested": "6.7",
+  "requires_php": "7.4",
+  "author": "株式会社Keys",
+  "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
+  "sections": {
+    "changelog": "1.0.0\n・初版。工事内容8種で質問が切り替わるステップ型問い合わせフォーム（山梨県27市町村＋県外の選択式）\n・受付のDB保存・CSV出力・受付完了メール自動返信・担当者通知\n・ハニーポット＋経過時間＋連投制限のスパム対策（画像認証なし）\n・ティザー（記事内の入口フォーム）から本フォームへの入力引き継ぎ"
+  }
+}

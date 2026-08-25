@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.0.2');
+define('EAF_VER', '1.0.3');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -108,6 +108,10 @@ function eaf_property_fields() {
             array('key'=>'fn_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'off', 'opts'=>'fn_symptom'),
             array('key'=>'fn_type',    'label'=>'種類',                'type'=>'select', 'def'=>'off', 'opts'=>'fn_type'),
         ),
+        'wiring' => array(
+            array('key'=>'wr_work',    'label'=>'ご希望の内容',        'type'=>'select', 'def'=>'req', 'opts'=>'wr_work'),
+            array('key'=>'wr_year',    'label'=>'建物の築年（西暦）',   'type'=>'number', 'def'=>'off', 'ph'=>'例：1995'),
+        ),
         'business' => array(
             array('key'=>'bz_kind',    'label'=>'建物の用途',          'type'=>'select', 'def'=>'req', 'opts'=>'bz_kind'),
             array('key'=>'bz_work',    'label'=>'ご検討の工事',        'type'=>'select', 'def'=>'off', 'opts'=>'bz_work'),
@@ -117,7 +121,7 @@ function eaf_property_fields() {
         /* ★その他だけは自由記述を必須にする。ここを非表示にすると
            「その他・分からない」を選んだ人が何も伝えられないフォームになる。 */
         'other' => array(
-            array('key'=>'ot_note',    'label'=>'お困りの内容',        'type'=>'textarea','def'=>'req', 'ph'=>'例：何が起きているか分かりませんが、時々部屋の電気が消えます'),
+            array('key'=>'ot_note',    'label'=>'どんなことでお困りですか','type'=>'textarea','def'=>'req', 'ph'=>'例：何が起きているか分かりませんが、時々部屋の電気が消えます'),
         ),
     );
 }
@@ -248,6 +252,9 @@ function eaf_opt_list($key) {
         case 'fn_place':  return array('台所','浴室','トイレ','洗面所','その他');
         case 'fn_symptom':return array('動かない','異音がする','風が弱い','古いので替えたい');
         case 'fn_type':   return array('プロペラ式','シロッコ（レンジフード）','天井埋込型','分からない');
+
+        /* ── 住宅配線・電気工事全般 ─────────────────── */
+        case 'wr_work':   return array('配線の交換・更新','リフォーム・増築に合わせた工事','新築の電気工事','電気の調子が悪い（原因を見てほしい）','まず相談したい');
 
         /* ── 法人 ───────────────────────────────────── */
         case 'bz_kind':   return array('店舗','事務所','工場','倉庫','アパート・マンション（オーナー）','その他');
@@ -508,6 +515,28 @@ add_action('admin_enqueue_scripts', function ($hook) {
     if (strpos($hook, 'eamber-form') !== false) wp_enqueue_media();
 });
 
+/**
+ * 丸ゴシックの読み込み。
+ *
+ * ★ショートコードの中で enqueue すると、その時点で wp_head を過ぎているため
+ *   スタイルがフッターに出て、一瞬だけ別の書体で描画される。
+ *   本文にショートコードがあるかを wp_enqueue_scripts の時点で調べ、head に入れる。
+ * ※ 読み込みたくない場合は、フィルタ eaf_load_font に false を返す。
+ *   その場合も端末側の丸ゴシック（iOSのヒラギノ丸ゴ等）へ自動で落ちるだけで壊れない。
+ */
+add_action('wp_enqueue_scripts', function () {
+    if (!apply_filters('eaf_load_font', true)) return;
+    if (!is_singular()) return;
+    $post = get_post();
+    if (!$post || !has_shortcode((string) $post->post_content, 'eamber_form')) return;
+    wp_enqueue_style(
+        'eaf-rounded-font',
+        'https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap',
+        array(),
+        null
+    );
+});
+
 function eaf_sanitize_options($in) {
     if (!is_array($in)) $in = array();
     $out = array(
@@ -568,8 +597,13 @@ $GLOBALS['EAF_PTYPE_LABEL'] = array(
     'outlet'   => 'コンセント・スイッチ',
     'light'    => '照明・LED化',
     'fan'      => '換気扇',
+    /* ★住宅配線は料金表にある正式メニューなのに、初版では選択肢から漏れていた。
+       記事台帳286本のうち22本がこの領域で、「◯◯市 電気工事」の主要な受け皿でもある。 */
+    'wiring'   => '住宅の配線・電気工事全般',
     'business' => '店舗・事務所・工場の設備',
-    'other'    => 'その他・分からない',
+    /* ★最大の流入は「電気工事を頼みたい」までしか決まっていない層。
+       ここを「その他」という格下の逃げ道にすると、その層が選びづらくなる。 */
+    'other'    => 'まだ決まっていない・相談したい',
 );
 
 /* タイル選択用の短い表記（タイルに長い正式名を入れると2行に折れて選びにくいため） */
@@ -580,8 +614,46 @@ $GLOBALS['EAF_PTYPE_SHORT'] = array(
     'outlet'   => 'コンセント・スイッチ',
     'light'    => '照明・LED',
     'fan'      => '換気扇',
+    'wiring'   => '住宅の配線・全般',
     'business' => '店舗・事務所・工場',
-    'other'    => 'その他・分からない',
+    'other'    => 'まだ決まっていない',
+);
+
+/**
+ * タイルのアイコン。
+ * 線画にそろえてある（塗りのイラストはテーマの背景色と喧嘩して、
+ * 導入先のサイトによっては潰れて見えなくなる）。
+ */
+function eaf_ptype_icon($k) {
+    $p = array(
+        'aircon'   => '<rect x="3" y="5" width="18" height="8" rx="2.5"/><path d="M6 16.5c1.6 0 1.6 2 3.2 2M13 16.5c1.6 0 1.6 2 3.2 2M6.5 9.5h11"/>',
+        'breaker'  => '<path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12z"/>',
+        'intercom' => '<rect x="5" y="2.5" width="14" height="19" rx="3"/><circle cx="12" cy="9" r="2.6"/><path d="M9 16.5h6"/>',
+        'outlet'   => '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9.5" cy="12" r="1.3"/><circle cx="14.5" cy="12" r="1.3"/>',
+        'light'    => '<path d="M12 2.8a6 6 0 0 0-3.4 11c.6.5.9 1.1.9 1.8v.4h5v-.4c0-.7.3-1.3.9-1.8A6 6 0 0 0 12 2.8Z"/><path d="M9.8 19.4h4.4M10.6 21.4h2.8"/>',
+        'fan'      => '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 10V3.2M14 12h6.8M12 14v6.8M10 12H3.2"/>',
+        'wiring'   => '<circle cx="4.5" cy="4.5" r="1.9"/><path d="M4.5 6.4v5.1a4 4 0 0 0 4 4h7a4 4 0 0 1 4 4v1"/><path d="M9 11h6"/>',
+        'business' => '<path d="M3 21h18M5.5 21V6.5L12 3.5l6.5 3V21"/><path d="M9.5 10h1.2M13.3 10h1.2M9.5 14h1.2M13.3 14h1.2"/>',
+        'other'    => '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.2 2.6c-.5.2-.8.7-.8 1.2v.4"/><path d="M12 17.1h.01"/>',
+    );
+    if (!isset($p[$k])) return '';
+    return '<svg class="fhs-tile-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"'
+         . ' fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+         . $p[$k] . '</svg>';
+}
+
+/* タイルに添える代表例。「自分のはこれだ」と言い当ててもらうための手がかりで、
+   ここが薄いと、当てはまるタイルがあるのに無いと思われて離脱する。 */
+$GLOBALS['EAF_PTYPE_NOTE'] = array(
+    'aircon'   => '取り付け・交換・効かない',
+    'breaker'  => '落ちる・停電・アンペア変更',
+    'intercom' => '鳴らない・映らない・交換',
+    'outlet'   => '増設・交換・焦げくさい',
+    'light'    => '交換・LED化・つかない',
+    'fan'      => '動かない・異音・交換',
+    'wiring'   => '配線の交換・リフォーム・新築',
+    'business' => 'キュービクル・LED化・LAN',
+    'other'    => 'まずは相談だけでも',
 );
 
 /* =========================================================================
@@ -1911,11 +1983,6 @@ function eaf_shortcode($atts = array()) {
         自社サイトの工事問い合わせでは電話も同じ受注。隠す理由がない）。 */
     $op_tel = eaf_opt('operator_contact', '');
 
-    $ptype_options = '<option value="">選択してください</option>';
-    foreach ($GLOBALS['EAF_PTYPE_LABEL'] as $k => $v) {
-        $ptype_options .= '<option value="' . esc_attr($k) . '">' . esc_html($v) . '</option>';
-    }
-
     $agree_label = 'プライバシーポリシーおよび免責事項に同意します（必須）';
     if ($privacy || $terms) {
         $p = $privacy ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>' : 'プライバシーポリシー';
@@ -1923,15 +1990,29 @@ function eaf_shortcode($atts = array()) {
         $agree_label = $p . 'および' . $t . 'に同意します（必須）';
     }
 
-    /** 工事内容のタイル選択（1タップで選べるようにする。セレクトより離脱が少ない） */
-    $render_ptype_tiles = function ($uid, $name = 'ptype') {
+    /**
+     * 工事内容のタイル選択。
+     *
+     * ★セレクトは「開く→探す→選ぶ」の3動作だが、タイルは押すだけの1動作で済む。
+     *   さらに選択肢が最初から一覧で見えるので、「電気工事を頼みたい」までしか
+     *   決まっていない読者が、自分の用件をこの一覧から言い当てられる。
+     *   この層が流入の最大勢力なので、一覧の網羅性が反響数に直結する。
+     */
+    $render_ptype_tiles = function ($uid, $name = 'ptype', $with_note = false, $labelledby = '') {
         ob_start(); ?>
-        <div class="fhs-tiles" role="group">
+        <div class="fhs-tiles" role="group"<?php echo $labelledby ? ' aria-labelledby="' . esc_attr($labelledby) . '"' : ''; ?>>
 <?php foreach ($GLOBALS['EAF_PTYPE_LABEL'] as $k => $v):
         $short = isset($GLOBALS['EAF_PTYPE_SHORT'][$k]) ? $GLOBALS['EAF_PTYPE_SHORT'][$k] : $v;
+        $note  = isset($GLOBALS['EAF_PTYPE_NOTE'][$k])  ? $GLOBALS['EAF_PTYPE_NOTE'][$k]  : '';
         $tid = $uid . '-tile-' . $k; ?>
           <input type="radio" name="<?php echo esc_attr($name); ?>" id="<?php echo esc_attr($tid); ?>" value="<?php echo esc_attr($k); ?>" class="fhs-tile-input">
-          <label class="fhs-tile" for="<?php echo esc_attr($tid); ?>"><?php echo esc_html($short); ?></label>
+          <label class="fhs-tile fhs-tile-<?php echo esc_attr($k); ?>" for="<?php echo esc_attr($tid); ?>">
+            <?php echo eaf_ptype_icon($k); ?>
+            <span class="fhs-tile-t"><?php echo esc_html($short); ?></span>
+<?php if ($with_note && $note !== ''): ?>
+            <span class="fhs-tile-n"><?php echo esc_html($note); ?></span>
+<?php endif; ?>
+          </label>
 <?php endforeach; ?>
         </div>
 <?php return ob_get_clean();
@@ -2008,7 +2089,7 @@ function eaf_shortcode($atts = array()) {
   echo $t_width ? ' style="max-width:' . esc_attr($t_width) . '"' : ''; ?>>
 <?php if ($need_assets): ?>
   <style>
-    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0;color:var(--fhs-ink);font-family:inherit;line-height:1.75;font-size:17px}
+    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0;color:var(--fhs-ink);font-family:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","ヒラギノ丸ゴ ProN W4","Noto Sans JP","Hiragino Kaku Gothic ProN",sans-serif;line-height:1.75;font-size:17px}
     /* テーマ側が box-sizing を当てているかどうかで、余白ぶん高さ・幅がずれる。
        このフォームの中だけは border-box に固定して、どのテーマでも同じ見た目にする。 */
     .fhs-wrap,.fhs-wrap *{box-sizing:border-box}
@@ -2017,18 +2098,21 @@ function eaf_shortcode($atts = array()) {
     .fhs-card > :last-child{margin-bottom:0}
     .fhs-wrap label{display:block;font-weight:700;margin:18px 0 7px;font-size:17px;color:#374151;letter-spacing:.01em}
     .fhs-req,.fhs-opt{font-size:11px;font-weight:700;border-radius:4px;padding:4px 7px;line-height:1;margin-left:8px;display:inline-flex;align-items:center;vertical-align:middle;letter-spacing:.02em;white-space:nowrap;flex:0 0 auto}
-    .fhs-req{background:var(--fhs-badge-bg);color:#fff}
-    .fhs-opt{background:#eef1f5;color:#6b7280}
+    /* ★「必須」を警告色にしない。赤いバッジが画面に並ぶと、頼む前から叱られている
+       ように見えて離脱する。ブランド色を薄く敷いて、うるさくない印だけ残す。 */
+    .fhs-req{background:rgba(var(--fhs-brand-rgb),.13);color:var(--fhs-brand)}
+    .fhs-opt{background:#F2EFEA;color:#8B8378}
     .fhs-req.fhs-done{background:var(--fhs-brand);color:#fff;border-radius:50%;width:20px;height:20px;padding:0;font-size:12px;justify-content:center}
     .fhs-lead{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:10px;padding:14px 16px;font-size:16px;color:#374151;margin-bottom:20px;white-space:pre-line}
     /* フォーム冒頭の電話案内。急ぎの読者が最初に目にする位置に置く */
     .fhs-telbar{background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:10px;padding:13px 16px;font-size:16px;font-weight:700;color:var(--fhs-ink);margin-bottom:16px;text-align:center}
     .fhs-telbar a{color:var(--fhs-brand);font-size:19px;text-decoration:none;white-space:nowrap}
-    .fhs-section{display:flex;align-items:center;font-weight:800;font-size:21px;color:var(--fhs-ink);margin:34px 0 10px;padding-left:12px;border-left:5px solid var(--fhs-brand);line-height:1.45;letter-spacing:.01em}
+    .fhs-section{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;color:var(--fhs-ink);margin:34px 0 12px;line-height:1.45;letter-spacing:.01em}
+    .fhs-section::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--fhs-brand);flex:0 0 auto}
     .fhs-form > .fhs-section:first-child{margin-top:0}
     /* ★チェックボックス・ラジオは対象外にする。padding や角丸が乗ると、
        テーマが自前で描いている環境で丸く潰れるなど表示が壊れる。 */
-    .fhs-wrap input:not([type=checkbox]):not([type=radio]),.fhs-wrap select,.fhs-wrap textarea{width:100%;padding:14px 15px;border:1px solid #cbd5e1;border-radius:9px;font-size:18px;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
+    .fhs-wrap input:not([type=checkbox]):not([type=radio]),.fhs-wrap select,.fhs-wrap textarea{width:100%;padding:14px 15px;border:1.5px solid #E2DCD2;border-radius:14px;font-size:18px;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
     .fhs-wrap input:not([type=checkbox]):not([type=radio]):focus,.fhs-wrap select:focus,.fhs-wrap textarea:focus{outline:none;border-color:var(--fhs-brand);box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.15)}
     /* テーマ側の appearance:none などを打ち消して、ブラウザ標準の四角いチェックに戻す */
     .fhs-wrap input[type=checkbox]{-webkit-appearance:checkbox;appearance:auto;width:auto;min-width:0;height:auto;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none}
@@ -2043,7 +2127,8 @@ function eaf_shortcode($atts = array()) {
     .fhs-check{display:flex;gap:9px;align-items:flex-start;margin-top:14px}
     .fhs-wrap .fhs-check input[type=checkbox]{margin-top:5px;transform:scale(1.25);flex:0 0 auto}
     .fhs-check label{margin:0;font-weight:400;font-size:16px}
-    .fhs-wrap button{margin-top:24px;width:100%;background:var(--fhs-btn-bg);color:var(--fhs-btn-text);border:0;border-radius:10px;padding:18px;font-size:20px;font-weight:700;cursor:pointer}
+    .fhs-wrap button{margin-top:24px;width:100%;background:var(--fhs-btn-bg);color:var(--fhs-btn-text);border:0;border-radius:999px;padding:18px;font-size:20px;font-weight:800;cursor:pointer;box-shadow:0 6px 16px rgba(30,26,21,.18);transition:transform .12s,filter .15s}
+    .fhs-wrap button:active{transform:translateY(1px)}
     /* ステップ表示。★.fhs-step はティザーの「STEP 1」バッジが使っているので別名にすること */
     .fhs-wrap .fhs-formstep{display:block}
     .fhs-steps{margin-bottom:22px}
@@ -2132,13 +2217,41 @@ function eaf_shortcode($atts = array()) {
     /* ★セレクタは .fhs-wrap 付きで書くこと。上の .fhs-wrap input / .fhs-wrap label より
        詳細度が低いと width:100% や display:block に負け、隠したはずのラジオが
        画面幅いっぱいに広がって横スクロールが出る。 */
-    /* タイルは3つ横並びが基本。入らなくなったら自動で2つ・1つに落ちる */
-    .fhs-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:10px}
+    /* ★9枚を一覧で見せきる。数を絞ると「自分のが無い」と判断されて離脱するので、
+       選びやすさより網羅性を優先している。min() を挟まないと狭い端末で列が縮まない。 */
+    .fhs-ptype-field{margin:0 0 6px}
+    .fhs-tile-q{display:flex;align-items:center;flex-wrap:wrap;font-weight:800;font-size:19px;color:var(--fhs-ink);margin:0 0 12px;line-height:1.5}
+    .fhs-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:10px}
     .fhs-wrap .fhs-tile-input,.fhs-wrap input[type=radio].fhs-tile-input{position:absolute;opacity:0;width:1px;height:1px;padding:0;border:0;pointer-events:none;appearance:none;-webkit-appearance:none}
-    .fhs-wrap .fhs-tile{display:flex;align-items:center;justify-content:center;text-align:center;background:#fff;border:2px solid #cbd5e1;border-radius:10px;padding:15px 8px;font-weight:700;font-size:16px;color:#374151;cursor:pointer;transition:border-color .15s,background .15s,color .15s;margin:0;line-height:1.3;min-height:56px}
-    .fhs-wrap .fhs-tile:hover{border-color:rgba(var(--fhs-brand-rgb),.6)}
-    .fhs-wrap .fhs-tile-input:checked + .fhs-tile{border-color:var(--fhs-brand);background:rgba(var(--fhs-brand-rgb),.08);color:var(--fhs-brand)}
-    .fhs-wrap .fhs-tile-input:focus-visible + .fhs-tile{box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.25)}
+    .fhs-wrap .fhs-tile{
+      display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;
+      background:var(--t-bg,#F4F2EE);color:var(--t-fg,#5A5347);
+      border:2px solid transparent;border-radius:18px;padding:14px 8px 12px;margin:0;cursor:pointer;
+      font-weight:700;font-size:13.5px;line-height:1.35;
+      box-shadow:inset 0 -3px 0 rgba(0,0,0,.07);
+      transition:transform .12s,box-shadow .15s,border-color .15s
+    }
+    .fhs-wrap .fhs-tile-ico{width:26px;height:26px;flex:0 0 auto}
+    .fhs-tile-t{display:block}
+    .fhs-tile-n{display:block;font-weight:500;font-size:11px;opacity:.8;line-height:1.5}
+    .fhs-wrap .fhs-tile:hover{transform:translateY(-2px);box-shadow:inset 0 -3px 0 rgba(0,0,0,.07),0 7px 15px rgba(40,45,60,.14)}
+    .fhs-wrap .fhs-tile:active{transform:translateY(0)}
+    .fhs-wrap .fhs-tile-input:checked + .fhs-tile{border-color:currentColor;box-shadow:inset 0 -3px 0 rgba(0,0,0,.07),0 7px 15px rgba(40,45,60,.18)}
+    .fhs-wrap .fhs-tile-input:focus-visible + .fhs-tile{box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.3)}
+    /* ★内容ごとに色を変える。9枚を同じ色で並べると見分けがつかず、探す時間が延びる */
+    .fhs-tile-aircon  {--t-bg:#EAF4FF;--t-fg:#2F6BA8}
+    .fhs-tile-breaker {--t-bg:#FFF2DE;--t-fg:#A9660B}
+    .fhs-tile-intercom{--t-bg:#EDF7EE;--t-fg:#3F7A4B}
+    .fhs-tile-outlet  {--t-bg:#FCEDF1;--t-fg:#A6486A}
+    .fhs-tile-light   {--t-bg:#F3EFFC;--t-fg:#6A56A8}
+    .fhs-tile-fan     {--t-bg:#EAF6F6;--t-fg:#2F7E7E}
+    .fhs-tile-wiring  {--t-bg:#FDF1E6;--t-fg:#A85F2B}
+    .fhs-tile-business{--t-bg:#EFF1F6;--t-fg:#4C5878}
+    .fhs-tile-other   {--t-bg:#F5F3EF;--t-fg:#6B6155}
+    /* ティザーは記事の途中に置く小さな入口なので、タイルも一回り小さくする */
+    .fhs-design-teaser .fhs-tiles,.fhs-design-teaser-v .fhs-tiles{grid-template-columns:repeat(auto-fit,minmax(min(100%,104px),1fr));gap:7px}
+    .fhs-design-teaser .fhs-tile,.fhs-design-teaser-v .fhs-tile{padding:9px 6px;font-size:12px;border-radius:14px;gap:3px}
+    .fhs-wrap.fhs-design-teaser .fhs-tile-ico,.fhs-wrap.fhs-design-teaser-v .fhs-tile-ico{width:20px;height:20px}
     /* ===== 横長：入力欄を横一列に並べる =====
        ★ビューポート幅のメディアクエリではなく flex-wrap で折り返す。
          幅はショートコードの width で決まるので、画面が広くてもカードが狭いことがある。
@@ -2169,7 +2282,8 @@ function eaf_shortcode($atts = array()) {
       .fhs-design-teaser .fhs-thead{text-align:center}
       .fhs-design-teaser .fhs-ttexts{justify-content:center}
       .fhs-design-teaser .fhs-ttags{order:0;flex:1 1 100%;margin-left:0;margin-bottom:2px;justify-content:center}
-      .fhs-tiles{grid-template-columns:1fr;gap:8px}
+      /* 1列にすると9枚で画面が縦に伸びきるので、狭い端末でも2列は保つ */
+      .fhs-tiles{grid-template-columns:repeat(2,1fr);gap:8px}
       .fhs-wrap .fhs-tile{min-height:0;padding:13px 8px}
       .fhs-ttitle{font-size:19px}
       .fhs-design-teaser .fhs-card,.fhs-design-teaser-v .fhs-card{padding:18px 16px 20px}
@@ -2264,10 +2378,12 @@ function eaf_shortcode($atts = array()) {
 <?php endif; ?>
 
 <?php if ($stepped): ?><div class="fhs-formstep" data-step="1"><?php endif; ?>
-      <div class="fhs-section">お困りの内容</div>
-      <label for="<?php echo esc_attr($uid . '-ptype'); ?>">工事内容<span class="fhs-req">必須</span></label>
-      <select name="ptype" id="<?php echo esc_attr($uid . '-ptype'); ?>" required><?php echo $ptype_options; ?></select>
-      <div class="fhs-hint">選ぶと、その内容に合わせた入力欄が表示されます</div>
+      <?php /* 見出しは置かない。問いかけそのものが見出しとして働くので、
+               「お困りの内容」と重ねると同じことを2回言うことになる。 */ ?>
+      <div class="fhs-ptype-field">
+        <span class="fhs-tile-q" id="<?php echo esc_attr($uid . '-ptq'); ?>">どんなことでお困りですか？<span class="fhs-req">必須</span></span>
+        <?php echo $render_ptype_tiles($uid, 'ptype', true, $uid . '-ptq'); ?>
+      </div>
 
       <label for="<?php echo esc_attr($uid . '-address'); ?>">お住まい・現場の市町村<span class="fhs-req">必須</span></label>
       <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" required>
@@ -2391,7 +2507,13 @@ function eaf_shortcode($atts = array()) {
   var btn = wrap.querySelector('.fhs-submit');
   var SUBMIT_LABEL = btn ? btn.textContent : '送信';
   var SENDING = false;   // 送信中フラグ（二重送信の防止。btn.disabled だけではEnter連打を防げない）
-  var ptypeSel = wrap.querySelector('select[name="ptype"]');
+  /* 工事内容はタイル（ラジオ）で選ばせる。他の入力欄と同じようには扱えないので、
+     値の読み取りをここに閉じ込める。ティザー側も同じラジオなので両方これで読める。 */
+  var ptypeBox = wrap.querySelector('.fhs-ptype-field');
+  function ptypeValue(){
+    var r = form.querySelector('input[name="ptype"]:checked');
+    return r ? r.value : '';
+  }
   var groups = wrap.querySelectorAll('.fhs-group[data-ptype]');
 
   /* その欄が「ちゃんと埋まっているか」。
@@ -2425,13 +2547,13 @@ function eaf_shortcode($atts = array()) {
     return (lbl && lbl.tagName === 'LABEL') ? lbl.querySelector('.fhs-req') : null;
   }
 
-  // 画面の並び順に：工事内容 → 市町村 → 選択中の内容の必須項目 → その他の必須項目
+  // 画面の並び順に：市町村 → 選択中の内容の必須項目 → その他の必須項目
+  // ★工事内容（タイル）はラジオなのでこの一覧には入れず、updateFormState で個別に見る
   // ★メールは任意なのでここには入れない（形式チェックはステップ送りと送信時に行う）
   function currentRequired(){
     var req = [];
-    if (form.elements['ptype'])   req.push(form.elements['ptype']);
     if (form.elements['address']) req.push(form.elements['address']);
-    var pt = ptypeSel ? ptypeSel.value : '';
+    var pt = ptypeValue();
     if (pt) {
       var g = wrap.querySelector('.fhs-group[data-ptype="' + pt + '"]');
       if (g) Array.prototype.forEach.call(g.querySelectorAll('[data-req="1"]'), function(el){ req.push(el); });
@@ -2446,6 +2568,19 @@ function eaf_shortcode($atts = array()) {
     if (TEASER) return;   // ティザーは引き継ぐだけなので、必須ガイドは動かさない
     Array.prototype.forEach.call(form.querySelectorAll('.fhs-next'), function(e){ e.classList.remove('fhs-next'); });
     var req = currentRequired(), firstEmpty = null, remaining = 0;
+
+    /* 工事内容はラジオなので個別に見る。画面の一番上にあるので、
+       未選択のときは「あと◯項目」の数に必ず含める。 */
+    if (ptypeBox) {
+      var ptOk = ptypeValue() !== '';
+      var pb = ptypeBox.querySelector('.fhs-req');
+      if (pb) {
+        if (ptOk) { pb.classList.add('fhs-done'); pb.textContent = '✓'; }
+        else { pb.classList.remove('fhs-done'); pb.textContent = '必須'; }
+      }
+      if (!ptOk) remaining++;
+    }
+
     req.forEach(function(el){
       var b = badgeFor(el);
       var filled = fieldOk(el);   // 形式まで正しいときだけ ✓ にする
@@ -2465,7 +2600,7 @@ function eaf_shortcode($atts = array()) {
   // 種別を選ぶと、その種別の入力欄だけ表示
   function switchType(){
     if (TEASER) return;
-    var pt = ptypeSel ? ptypeSel.value : '';
+    var pt = ptypeValue();
     Array.prototype.forEach.call(groups, function(g){
       g.style.display = (g.getAttribute('data-ptype') === pt) ? '' : 'none';
     });
@@ -2505,7 +2640,7 @@ function eaf_shortcode($atts = array()) {
   function missingIn(i){
     if (!STEPPED) return [];
     var box = steps[i], out = [];
-    var els = box.querySelectorAll('select[name="ptype"], select[name="address"], [data-req="1"]');
+    var els = box.querySelectorAll('select[name="address"], [data-req="1"]');
     Array.prototype.forEach.call(els, function(el){
       if (!el.offsetParent && el.type !== 'hidden') return;      // 表示されていない種別の欄は対象外
       if (el.closest('.fhs-group[data-ptype]') && el.closest('.fhs-group[data-ptype]').style.display === 'none') return;
@@ -2516,11 +2651,15 @@ function eaf_shortcode($atts = array()) {
     if (em && em.value.trim() !== '' && !fieldOk(em)) out.push(em);
     var agree = box.querySelector('input[name="agree"]');
     if (agree && !agree.checked) out.push(agree);
+    /* 工事内容はラジオ。画面の先頭にあるので、未選択なら真っ先に知らせる */
+    var ptIn = box.querySelector('input[name="ptype"]');
+    if (ptIn && ptypeValue() === '') out.unshift(ptIn);
     return out;
   }
 
   function labelTextOf(el){
     if (el.name === 'agree') return '個人情報の取扱いへの同意';
+    if (el.name === 'ptype') return 'お困りの内容';
     var lbl = el.previousElementSibling;
     if (!lbl || lbl.tagName !== 'LABEL') {
       var byId = el.id ? wrap.querySelector('label[for="' + el.id + '"]') : null;
@@ -2551,9 +2690,10 @@ function eaf_shortcode($atts = array()) {
         errBox.innerHTML = miss.map(function(el){
           var why = fieldProblem(el);
           var name = esc(labelTextOf(el));
-          var msg = (why === 'format')
-            ? '「' + name + '」の形式をご確認ください。'
-            : '「' + name + '」を入力してください。';
+          var chooser = (el.name === 'ptype' || el.tagName === 'SELECT');
+          var msg = (why === 'format') ? '「' + name + '」の形式をご確認ください。'
+                  : chooser            ? '「' + name + '」をお選びください。'
+                                       : '「' + name + '」を入力してください。';
           return '<div class="fhs-err">' + msg + '</div>';
         }).join('');
         errBox.scrollIntoView({ behavior:'smooth', block:'center' });
@@ -2579,7 +2719,9 @@ function eaf_shortcode($atts = array()) {
     }, 120);
   }
 
-  if (ptypeSel) ptypeSel.addEventListener('change', switchType);
+  Array.prototype.forEach.call(form.querySelectorAll('input[name="ptype"]'), function(r){
+    r.addEventListener('change', switchType);
+  });
   Array.prototype.forEach.call(form.querySelectorAll('.fhs-typed, select[name="address"], input[name="email"]'), function(el){
     el.addEventListener('change', updateFormState);
     el.addEventListener('input', updateFormState);

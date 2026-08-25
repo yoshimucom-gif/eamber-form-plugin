@@ -55,10 +55,25 @@ $expected = array(
     'marketing',          // 営業メール希望のチェック（任意）
     'other__ot_note',
     'outlet__ol_work',
-    'ptype',              // 工事内容（必須）
+    'ptype',              // 工事内容（必須・タイル）
+    'wiring__wr_work',
 );
 sort($expected);
 t('既定で出る入力欄は必須＋メール＋同意だけ', $names, $expected);
+
+/* ================= 2c. 工事内容はタイルで選ばせる ================= */
+t('工事内容にセレクトを使っていない', strpos($html, '<select name="ptype"') !== false, false);
+t('タイルは9枚',                     substr_count($html, 'class="fhs-tile-input"'), 9);
+/* CSS側にも .fhs-tile-ico が3回出るので、マークアップの class 属性だけを数える */
+t('タイルにアイコンが入る',           substr_count($html, 'class="fhs-tile-ico"'), 9);
+t('タイルに代表例が添えてある',       substr_count($html, 'class="fhs-tile-n"'), 9);
+t('住宅配線のタイルがある',           strpos($html, 'value="wiring"') !== false, true);
+t('「まだ決まっていない」が選べる',   strpos($html, 'まだ決まっていない') !== false, true);
+t('問いかけが見出しとして出る',       strpos($html, 'どんなことでお困りですか？') !== false, true);
+/* ★ラジオはタイルの直前に置く。間に要素が挟まると隣接セレクタ（+）が外れ、
+     選択しても色が変わらないフォームになる。 */
+t('ラジオとタイルが隣接している',
+  preg_match('/class="fhs-tile-input">\s*<label class="fhs-tile /', $html) === 1, true);
 
 /* その他だけは自由記述が必須（ここを非表示にすると何も伝えられなくなる） */
 $ot_def = '';

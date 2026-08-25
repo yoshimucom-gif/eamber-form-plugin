@@ -47,7 +47,7 @@ t('最新なら「最新です」',     strpos($page3, '（最新です）') !==
 t('更新の導線は出さない',     strpos($page3, 'プラグイン画面で更新する') !== false, false);
 
 // 自己診断
-t('自己診断: 検査が空振りしていない', strpos($page3, 'お問い合わせフォーム 設定') !== false, true);
+t('自己診断: 検査が空振りしていない', strpos($page3, '電気工事反響フォーム 設定') !== false, true);
 
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 @unlink($GLOBALS['FAKE_STATE_FILE']);

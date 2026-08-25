@@ -1,6 +1,11 @@
 <?php
 /**
- * 対応会社の画像（会社名・所在地の左に丸く出す）。
+ * フォーム下部の「対応会社」欄と会社画像が「無い」ことの検査（機能削除の退行防止）。
+ *
+ * 本気査定では運営（サイト）と査定会社が別だったため、
+ * 「どこの会社に連絡先を渡すのか」を示す会社欄・会社画像が必要だった。
+ * eamber-form は運営＝施工＝同じ会社の自社サイトに置くフォームなので、
+ * サイト自体が会社を示している＝会社欄はまるごと削除した。
  */
 $GLOBALS['FAKE_STATE_FILE'] = __DIR__ . '/cimg_state.json';
 @unlink($GLOBALS['FAKE_STATE_FILE']);
@@ -12,45 +17,31 @@ function t($n, $g, $w) {
     global $ng; $ok = ($g === $w); if (!$ok) $ng++;
     printf("%s %s (got=%s)\n", $ok ? 'OK  ' : 'NG  ', $n, var_export($g, true));
 }
-function set_opts($a) { update_option(EAF_OPT, eaf_sanitize_options($a)); }
 
-$base = array('operator_name' => '株式会社e.Amber', 'operator_address' => '山梨県甲府市○○1-2-3');
-
-/* --- 設定すれば出る --- */
-set_opts($base + array('company_image' => 'https://example.test/company.png'));
-$html = eaf_shortcode(array());
-t('画像が出る',             strpos($html, 'class="fhs-opimg" src="https://example.test/company.png"') !== false, true);
-t('altに会社名が入る',      strpos($html, 'alt="株式会社e.Amber"') !== false, true);
-t('遅延読み込みを付ける',   strpos($html, 'loading="lazy"') !== false, true);
-t('画像→情報の順に並ぶ',   strpos($html, 'fhs-opimg') < strpos($html, 'fhs-operator-info'), true);
-t('丸くするCSSがある',      strpos($html, '.fhs-wrap .fhs-opimg{width:72px;height:72px') !== false, true);
-t('正方形に切り出すCSS',    strpos($html, 'object-fit:cover') !== false, true);
-
-/* --- 未設定なら出ない（会社の欄自体は出る） --- */
-set_opts($base);
-$h2 = eaf_shortcode(array('design' => 'card'));
-t('未設定なら画像は出ない', strpos($h2, 'fhs-opimg') !== false, false);
-t('会社の欄は出る',         strpos($h2, '対応会社') !== false, true);
-
-/* --- 危険なURLは弾く --- */
-foreach (array('javascript:alert(1)', 'data:text/html;base64,PHN2Zz4=') as $bad) {
-    set_opts($base + array('company_image' => $bad));
-    t('危険なURLは保存しない: ' . substr($bad, 0, 12), eaf_opt('company_image', ''), '');
+/* 旧設定を全部入れても、会社欄は現れない */
+update_option(EAF_OPT, eaf_sanitize_options(array(
+    'site_name' => '株式会社e.Amber', 'operator_address' => '山梨県甲府市○○1-2-3',
+    'operator_contact' => '055-000-0000', 'operator_email' => 'info@example.test',
+    'company_image' => 'https://example.test/logo.png', 'operator_url' => 'https://example.test/',
+)));
+foreach (array('default' => array(), 'card' => array('design' => 'card'), 'compact' => array('design' => 'compact')) as $name => $atts) {
+    $html = eaf_shortcode($atts);
+    t($name . ': 会社欄が出ない',   strpos($html, 'fhs-operator') !== false, false);
+    t($name . ': 会社画像が出ない', strpos($html, 'fhs-opimg') !== false, false);
 }
 
-/* --- ティザーには会社欄ごと出ない --- */
-set_opts($base + array('company_image' => 'https://example.test/company.png'));
-t('ティザーには出ない', strpos(eaf_shortcode(array('design' => 'teaser', 'url' => '/satei/')), 'fhs-opimg') !== false, false);
+/* 旧設定キーは保存されない */
+$o = get_option(EAF_OPT, array());
+t('company_image は保存されない', array_key_exists('company_image', $o), false);
+t('operator_url は保存されない',  array_key_exists('operator_url', $o), false);
+t('operator_name は保存されない', array_key_exists('operator_name', $o), false);
 
-/* --- 設定画面に画像選択欄が2つ（見出しアイコン・会社の画像）--- */
+/* 設定画面にも会社画像の欄が無い（ティザーのアイコン logo_url は残る） */
 $GLOBALS['FAKE_IS_ADMIN'] = true;
 ob_start(); eaf_settings_page(); $page = ob_get_clean();
-t('画像を選ぶ欄が2つある',   substr_count($page, 'class="fhs-logofield"'), 2);
-t('IDではなくクラスで組む',  strpos($page, 'id="fhs-logo-url"') !== false, false);
-t('会社の画像は丸プレビュー', strpos($page, 'fhs-logo-preview is-round') !== false || strpos($page, 'is-empty is-round') !== false, true);
-
-/* --- 自己診断 --- */
-t('自己診断: 検査が空振りしていない', strpos(eaf_shortcode(array('design' => 'card')), 'fhs-operator-info') !== false, true);
+t('対応会社タブが無い',       strpos($page, 'data-tab="company"') !== false, false);
+t('会社画像の欄が無い',       strpos($page, 'company_image') !== false, false);
+t('ティザーのアイコン欄は残る', strpos($page, 'logo_url') !== false, true);
 
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 @unlink($GLOBALS['FAKE_STATE_FILE']);

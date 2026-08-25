@@ -1,9 +1,10 @@
 <?php
 /**
- * 第三者提供（提携会社へ渡す場合）の表示。
- * ・提供先の説明が利用目的と同意文の両方に出ること
- * ・提供先のページURLがあればリンクになること
- * ・OFFのときは「第三者に提供しない」と出ること
+ * 第三者提供の機構が「無い」ことの検査（機能削除の退行防止）。
+ *
+ * 運営＝施工＝同じ会社の自社サイトに置くフォームなので、
+ * 本気査定にあった「提携先へ提供する」設定・同意文はまるごと削除した。
+ * 同意文は「ご本人の同意なく第三者に提供することはありません」に固定される。
  */
 $GLOBALS['FAKE_STATE_FILE'] = __DIR__ . '/tp_state.json';
 @unlink($GLOBALS['FAKE_STATE_FILE']);
@@ -15,41 +16,30 @@ function t($n, $g, $w) {
     global $ng; $ok = ($g === $w); if (!$ok) $ng++;
     printf("%s %s (got=%s)\n", $ok ? 'OK  ' : 'NG  ', $n, var_export($g, true));
 }
-function set_opts($a) { update_option(EAF_OPT, eaf_sanitize_options($a)); }
 
-/* --- 提供する場合：説明とリンク --- */
-set_opts(array(
-    'third_party' => '1',
-    'third_party_name' => '当社が提携する不動産会社（お住まいの地域を担当する1〜3社）',
-    'third_party_url'  => 'https://example.test/partners/',
-    'privacy_url' => 'https://example.test/privacy',
-));
+/* --- 1. 旧設定キーは保存されない（残っていても無視される） --- */
+update_option(EAF_OPT, eaf_sanitize_options(array(
+    'third_party' => '1', 'third_party_name' => '悪意ある提供先', 'third_party_url' => 'https://x.example/',
+)));
+$o = get_option(EAF_OPT, array());
+t('third_party は保存されない',      array_key_exists('third_party', $o), false);
+t('third_party_name は保存されない', array_key_exists('third_party_name', $o), false);
+t('third_party_url は保存されない',  array_key_exists('third_party_url', $o), false);
+
+/* --- 2. フォームの同意文は「提供しない」で固定 --- */
 $html = eaf_shortcode(array());
-t('提供先の説明が出る',        strpos($html, '当社が提携する不動産会社（お住まいの地域を担当する1〜3社）') !== false, true);
-t('提供先がリンクになる',      strpos($html, 'href="https://example.test/partners/"') !== false, true);
-t('別タブで開く',              strpos($html, 'target="_blank" rel="noopener"') !== false, true);
-t('提供先での取り扱いに触れる', strpos($html, '提供先での取り扱いは、提供先の定めによります') !== false, true);
-t('同意文にも提供先が入る',    substr_count($html, 'https://example.test/partners/') >= 2, true);
-t('カギ側のポリシーも出る',    strpos($html, 'https://example.test/privacy') !== false, true);
+t('「第三者に提供することはありません」が出る', strpos($html, 'ご本人の同意なく第三者に提供することはありません') !== false, true);
+t('提供する旨の文言は出ない', strpos($html, 'にご入力内容') !== false, false);
+t('「提供を含む」の同意文が出ない', strpos($html, 'への提供を含む') !== false, false);
 
-/* --- URLが無ければリンクにしない（ただの文字） --- */
-set_opts(array('third_party' => '1', 'third_party_name' => '提携する不動産会社', 'third_party_url' => ''));
-$h2 = eaf_shortcode(array('design' => 'card'));
-t('URL未設定なら説明は出る',   strpos($h2, '提携する不動産会社') !== false, true);
-t('URL未設定ならリンクなし',   preg_match('/<a[^>]*>提携する不動産会社<\/a>/u', $h2) === 1, false);
-
-/* --- 提供しない設定なら、その旨を出す --- */
-set_opts(array('third_party' => '0'));
-$h3 = eaf_shortcode(array('design' => 'compact'));
-t('提供しないと明記される',   strpos($h3, 'ご本人の同意なく第三者に提供することはありません') !== false, true);
-t('提供先の話は出ない',       strpos($h3, '提供先での取り扱い') !== false, false);
-
-/* --- 危険なURLは弾く --- */
-set_opts(array('third_party' => '1', 'third_party_name' => '提携先', 'third_party_url' => 'javascript:alert(1)'));
-t('javascript: は保存されない', eaf_opt('third_party_url', 'EMPTY'), 'EMPTY');
+/* --- 3. 設定画面に「個人情報」タブが無い --- */
+$GLOBALS['FAKE_IS_ADMIN'] = true;
+ob_start(); eaf_settings_page(); $page = ob_get_clean();
+t('個人情報タブが無い', strpos($page, 'data-tab="privacy"') !== false, false);
+t('提供先の入力欄が無い', strpos($page, 'third_party_name') !== false, false);
 
 /* --- 自己診断 --- */
-t('自己診断: 検査が空振りしていない', strpos(eaf_shortcode(array()), '個人情報の取り扱いについて') !== false, true);
+t('自己診断: 同意文の検査キーを検出できる', strpos('<p>ご本人の同意なく第三者に提供することはありません</p>', 'ご本人の同意なく第三者に提供することはありません') !== false, true);
 
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 @unlink($GLOBALS['FAKE_STATE_FILE']);

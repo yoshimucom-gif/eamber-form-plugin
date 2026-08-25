@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.0.0');
+define('EAF_VER', '1.0.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -48,17 +48,19 @@ function eaf_customer_fields() {
         array('key'=>'kana',         'label'=>'フリガナ',            'type'=>'text',   'col'=>'kana',          'len'=>100, 'def'=>'off', 'ph'=>'例：ヤマダ タロウ'),
         array('key'=>'tel',          'label'=>'電話番号',            'type'=>'tel',    'col'=>'tel',           'len'=>50,  'def'=>'req', 'ph'=>'例：090-1234-5678'),
         array('key'=>'contact_time', 'label'=>'ご連絡しやすい時間帯', 'type'=>'select', 'col'=>'contact_time',  'len'=>50,  'def'=>'opt', 'opts'=>'contact_time'),
-        array('key'=>'contact_way',  'label'=>'ご希望の連絡方法',     'type'=>'select', 'col'=>null,            'len'=>50,  'def'=>'opt', 'opts'=>'contact_way'),
+        array('key'=>'contact_way',  'label'=>'ご希望の連絡方法',     'type'=>'select', 'col'=>null,            'len'=>50,  'def'=>'off', 'opts'=>'contact_way'),
     );
 }
 
 /** ご状況（担当者が優先順位を付けるための情報）
- *  ★市町村はここに置かない。フォームの基幹項目（address）として最初のステップで聞く。 */
+ *  ★市町村はここに置かない。フォームの基幹項目（address）として最初のステップで聞く。
+ *  ★必須は増やさない方針。既定で出すのは建物・時期・自由記述の3つだけで、
+ *    残り（持ち家か賃貸か・いつから）は非表示が既定（管理画面で復活できる）。 */
 function eaf_situation_fields() {
     return array(
-        array('key'=>'building',   'label'=>'建物の種類',            'type'=>'select', 'col'=>'building',  'len'=>50,  'def'=>'req', 'opts'=>'building'),
-        array('key'=>'ownership',  'label'=>'持ち家か賃貸か',        'type'=>'select', 'col'=>'ownership', 'len'=>50,  'def'=>'opt', 'opts'=>'ownership'),
-        array('key'=>'since',      'label'=>'いつからの症状ですか',   'type'=>'select', 'col'=>null,        'len'=>50,  'def'=>'opt', 'opts'=>'since'),
+        array('key'=>'building',   'label'=>'建物の種類',            'type'=>'select', 'col'=>'building',  'len'=>50,  'def'=>'opt', 'opts'=>'building'),
+        array('key'=>'ownership',  'label'=>'持ち家か賃貸か',        'type'=>'select', 'col'=>'ownership', 'len'=>50,  'def'=>'off', 'opts'=>'ownership'),
+        array('key'=>'since',      'label'=>'いつからの症状ですか',   'type'=>'select', 'col'=>null,        'len'=>50,  'def'=>'off', 'opts'=>'since'),
         array('key'=>'timing',     'label'=>'ご希望の時期',          'type'=>'select', 'col'=>'timing',    'len'=>50,  'def'=>'opt', 'opts'=>'timing'),
         array('key'=>'detail',     'label'=>'症状・ご希望',          'type'=>'textarea','col'=>'detail',   'len'=>2000,'def'=>'opt', 'ph'=>'例：2階の部屋のブレーカーだけ、エアコンを付けると落ちます'),
     );
@@ -72,20 +74,20 @@ function eaf_property_fields() {
             array('key'=>'ac_floor',   'label'=>'設置する階',          'type'=>'select', 'def'=>'opt', 'opts'=>'ac_floor'),
             array('key'=>'ac_outlet',  'label'=>'専用コンセントの有無', 'type'=>'select', 'def'=>'opt', 'opts'=>'yesno_unknown'),
             array('key'=>'ac_body',    'label'=>'本体のご用意',        'type'=>'select', 'def'=>'opt', 'opts'=>'body_ready'),
-            array('key'=>'ac_model',   'label'=>'型番（分かれば）',     'type'=>'text',   'def'=>'opt', 'ph'=>'例：AN-C223SE'),
+            array('key'=>'ac_model',   'label'=>'型番（分かれば）',     'type'=>'text',   'def'=>'off', 'ph'=>'例：AN-C223SE'),
         ),
         'breaker' => array(
             array('key'=>'br_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'req', 'opts'=>'br_symptom'),
             array('key'=>'br_scope',   'label'=>'止まっている範囲',     'type'=>'select', 'def'=>'opt', 'opts'=>'br_scope'),
             array('key'=>'br_smell',   'label'=>'焦げたにおいの有無',   'type'=>'select', 'def'=>'opt', 'opts'=>'yesno_unknown'),
             array('key'=>'br_wire',    'label'=>'単相2線式／3線式',     'type'=>'select', 'def'=>'off', 'opts'=>'wire_type'),
-            array('key'=>'br_age',     'label'=>'分電盤の設置年（西暦）','type'=>'number','def'=>'opt', 'ph'=>'例：1995'),
+            array('key'=>'br_age',     'label'=>'分電盤の設置年（西暦）','type'=>'number','def'=>'off', 'ph'=>'例：1995'),
         ),
         'intercom' => array(
             array('key'=>'ic_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'req', 'opts'=>'ic_symptom'),
             array('key'=>'ic_type',    'label'=>'いまの機種',          'type'=>'select', 'def'=>'opt', 'opts'=>'ic_type'),
             array('key'=>'ic_want',    'label'=>'ご希望の機種',        'type'=>'select', 'def'=>'opt', 'opts'=>'ic_want'),
-            array('key'=>'ic_year',    'label'=>'建物の築年（西暦）',   'type'=>'number', 'def'=>'opt', 'ph'=>'例：2005'),
+            array('key'=>'ic_year',    'label'=>'建物の築年（西暦）',   'type'=>'number', 'def'=>'off', 'ph'=>'例：2005'),
         ),
         'outlet' => array(
             array('key'=>'ol_work',    'label'=>'ご希望の作業',        'type'=>'select', 'def'=>'req', 'opts'=>'ol_work'),
@@ -267,7 +269,7 @@ function eaf_activate() {
         name VARCHAR(100) NULL,
         kana VARCHAR(100) NULL,
         tel VARCHAR(50) NULL,
-        email VARCHAR(191) NOT NULL,
+        email VARCHAR(191) NULL,
         contact_time VARCHAR(50) NULL,
         ptype VARCHAR(20) NULL,
         address VARCHAR(255) NULL,
@@ -425,7 +427,7 @@ add_action('admin_notices', function () {
     $id = (int) eaf_opt('form_page_id', 0);
     if ($id <= 0) { delete_option('eaf_page_notice'); return; }
     delete_option('eaf_page_notice');
-    echo '<div class="notice notice-info is-dismissible"><p><strong>【お問い合わせ】お問い合わせページを下書きで作成しました。</strong><br>'
+    echo '<div class="notice notice-info is-dismissible"><p><strong>【電気工事反響フォーム】お問い合わせページを下書きで作成しました。</strong><br>'
        . '「お問い合わせ」（スラッグ <code>form</code>）という固定ページに <code>[eamber_form]</code> を入れてあります。'
        . '内容を確認して公開してください。<br>'
        . '<a class="button button-primary" href="' . esc_url(get_edit_post_link($id)) . '">ページを編集する</a> '
@@ -441,7 +443,7 @@ add_action('admin_notices', function () {
 add_action('admin_notices', function () {
     if (!current_user_can('manage_options')) return;
     if (eaf_site_is_https()) return;
-    echo '<div class="notice notice-error"><p><strong>【お問い合わせ】このサイトは https ではありません。</strong><br>'
+    echo '<div class="notice notice-error"><p><strong>【電気工事反響フォーム】このサイトは https ではありません。</strong><br>'
        . 'お客様が入力した<strong>お名前・電話番号・お住まいの市町村が、暗号化されずに送信されます</strong>。'
        . '公衆Wi-Fiなどでは第三者に読み取られます。'
        . 'サーバーでSSL証明書を有効にし、「設定 → 一般」のサイトアドレスを <code>https://</code> に変更してください。</p></div>';
@@ -454,32 +456,20 @@ function eaf_site_is_https() {
 /* 公開前チェック。お客様に見える信頼性の材料が抜けたまま公開されるのを防ぐ */
 add_action('admin_notices', function () {
     if (!current_user_can('manage_options')) return;
-    // 「対応会社」タブの項目。ここが空だと、フォームにも受付完了メールにも
-    // その行が出ない＝お客様は連絡先の分からない相手に自宅と電話番号を渡すことになる
-    $co = array();
-    if (eaf_opt('operator_name', '')    === '') $co[] = '会社名';
-    if (eaf_opt('operator_address', '') === '') $co[] = '所在地';
-    if (eaf_opt('operator_contact', '') === '') $co[] = '電話番号';
-    if (eaf_opt('operator_url', '')     === '') $co[] = '会社サイトURL';
     $miss = array();
-    if (eaf_opt('privacy_url', '') === '') $miss[] = 'プライバシーポリシーURL';
-    if (!$co && !$miss) return;
-    $parts = array();
-    if ($co)    $parts[] = '「対応会社」タブ：' . implode(' / ', $co);
-    if ($miss)  $parts[] = '「基本設定」タブ：' . implode(' / ', $miss);
-    echo '<div class="notice notice-warning"><p><strong>【お問い合わせ】公開前に未設定の項目があります</strong><br>'
-       . esc_html(implode('　', $parts)) . '<br>'
-       . 'このフォームは<strong>お名前・電話番号・お住まいの市町村</strong>を受け取ります。'
-       . 'お客様が「どこの会社に連絡先を渡すのか」を確かめられるよう、'
-       . '<strong>会社名・所在地・電話番号・サイト</strong>は埋めてください'
-       . '（空欄の項目は、フォームにも受付完了メールにも表示されません）。'
+    if (eaf_opt('operator_contact', '') === '') $miss[] = '電話番号';
+    if (eaf_opt('privacy_url', '') === '')      $miss[] = 'プライバシーポリシーURL';
+    if (!$miss) return;
+    echo '<div class="notice notice-warning"><p><strong>【電気工事反響フォーム】公開前に未設定の項目があります：'
+       . esc_html(implode(' / ', $miss)) . '</strong><br>'
+       . '電話番号はフォームの冒頭と受付完了メールに表示されます（急ぎのお客様は電話が最短のため）。'
        . '<a href="' . esc_url(admin_url('admin.php?page=eamber-form')) . '">設定画面</a>から設定できます。</p></div>';
 });
 
 add_action('admin_menu', function () {
-    add_menu_page('お問い合わせ', 'お問い合わせ', 'manage_options', 'eamber-form', 'eaf_settings_page', 'dashicons-admin-home', 58);
+    add_menu_page('電気工事反響フォーム', '電気工事反響フォーム', 'manage_options', 'eamber-form', 'eaf_settings_page', 'dashicons-lightbulb', 58);
     add_submenu_page('eamber-form', '設定', '設定', 'manage_options', 'eamber-form', 'eaf_settings_page');
-    add_submenu_page('eamber-form', '申込一覧', '申込一覧', 'manage_options', 'eamber-form-leads', 'eaf_leads_page');
+    add_submenu_page('eamber-form', '反響一覧', '反響一覧', 'manage_options', 'eamber-form-leads', 'eaf_leads_page');
 });
 
 add_action('admin_init', function () {
@@ -495,11 +485,9 @@ function eaf_sanitize_options($in) {
     if (!is_array($in)) $in = array();
     $out = array(
         'site_name'        => sanitize_text_field($in['site_name'] ?? '株式会社e.Amber'),
-        'operator_name'    => sanitize_text_field($in['operator_name'] ?? ''),
         'operator_contact' => sanitize_text_field($in['operator_contact'] ?? ''),
         'operator_address' => sanitize_text_field($in['operator_address'] ?? ''),
         'operator_email'   => sanitize_email($in['operator_email'] ?? ''),
-        'operator_url'     => esc_url_raw($in['operator_url'] ?? ''),
         'from_email'       => sanitize_email($in['from_email'] ?? ''),
         'notify_email'     => sanitize_email($in['notify_email'] ?? ''),
         'privacy_url'      => esc_url_raw($in['privacy_url'] ?? ''),
@@ -507,7 +495,6 @@ function eaf_sanitize_options($in) {
         // チェックボックス（未送信＝OFF。'' ではなく明示的に '0' を入れて区別する）
         'notify_on'        => !empty($in['notify_on'])      ? '1' : '0',
         // フォーム上に問い合わせ先（電話番号）を出すか。既定はOFF
-        'show_contact'     => !empty($in['show_contact'])    ? '1' : '0',
         'show_marketing'   => !empty($in['show_marketing']) ? '1' : '0',
         'show_note'        => !empty($in['show_note'])      ? '1' : '0',
         'step_form'        => !empty($in['step_form'])      ? '1' : '0',
@@ -515,11 +502,7 @@ function eaf_sanitize_options($in) {
         'spam_block_link'  => !empty($in['spam_block_link'])  ? '1' : '0',
         'spam_require_ja'  => !empty($in['spam_require_ja'])  ? '1' : '0',
         'spam_words'       => sanitize_textarea_field($in['spam_words'] ?? ''),
-        'third_party'      => !empty($in['third_party'])    ? '1' : '0',
-        'third_party_name' => sanitize_text_field($in['third_party_name'] ?? ''),
-        'third_party_url'  => esc_url_raw($in['third_party_url'] ?? ''),
         'logo_url'         => esc_url_raw($in['logo_url'] ?? ''),
-        'company_image'    => esc_url_raw($in['company_image'] ?? ''),
         // ティザーの見出しまわり（空欄なら表示しない）
         'teaser_badge'     => sanitize_text_field($in['teaser_badge'] ?? ''),
         'teaser_tags'      => sanitize_text_field($in['teaser_tags'] ?? ''),
@@ -750,18 +733,18 @@ function eaf_default_mail_body() {
 }
 
 /**
- * メールの末尾に付ける「対応会社の連絡先」。
+ * メールの末尾に付ける会社の連絡先（署名）。
  *
  * ★ここは問い合わせが済んだ後なので、断り書きではなく連絡先を出す。
  *   フォーム上で電話番号を伏せる設定にしていても、このメールには必ず載せる
  *   （受け付けた後にお客様が連絡できなくなるのを防ぐため）。
  */
 function eaf_mail_footer() {
-    $name  = eaf_opt('operator_name', '');
+    /* 運営＝施工が同じ会社（自社サイトのフォーム）なので、社名はサイト名に一本化している */
+    $name  = eaf_opt('site_name', '株式会社e.Amber');
     $addr  = eaf_opt('operator_address', '');
     $tel   = eaf_opt('operator_contact', '');
     $mail  = eaf_opt('operator_email', '');
-    $url   = eaf_opt('operator_url', '');
 
     $line = "───────────────────────────────\n";
     $out  = $line . "本件に関するお問い合わせは下記までお願いいたします。\n\n";
@@ -769,7 +752,6 @@ function eaf_mail_footer() {
     if ($addr !== '') $out .= "所在地 : " . $addr . "\n";
     if ($tel  !== '') $out .= "電話   : " . $tel . "\n";
     if ($mail !== '') $out .= "メール : " . $mail . "\n";
-    if ($url  !== '') $out .= "サイト : " . $url . "\n";
     return $out . rtrim($line);
 }
 
@@ -800,7 +782,7 @@ function eaf_mail_body($ctx) {
         '{city}'              => isset($ctx['city']) ? $ctx['city'] : '',
         '{email}'             => isset($ctx['email']) ? $ctx['email'] : '',
         '{tel}'               => isset($ctx['tel']) ? $ctx['tel'] : '',
-        '{operator_name}'     => eaf_opt('operator_name', ''),
+        '{operator_name}'     => eaf_opt('site_name', ''),
         '{operator_contact}'  => eaf_opt('operator_contact', ''),
     );
     // 未設定の項目で「お問い合わせ: 」「 様」のようにラベルだけが残らないよう、その行ごと落とす
@@ -832,7 +814,7 @@ function eaf_mail_subject() {
 function eaf_admin_notify_body($ctx) {
     $b  = "お問い合わせが届きました。\n\n";
     $b .= "───── お客様情報 ─────\n";
-    $b .= "■ メール : " . (isset($ctx['email']) ? $ctx['email'] : '') . "\n";
+    $b .= "■ メール : " . (!empty($ctx['email']) ? $ctx['email'] : '（未入力・お電話で折り返してください）') . "\n";
     if (!empty($ctx['customer_details'])) $b .= $ctx['customer_details'] . "\n";
     $b .= "\n───── 工事内容・ご状況 ─────\n";
     $b .= (isset($ctx['property_details']) ? $ctx['property_details'] : '') . "\n";
@@ -840,7 +822,7 @@ function eaf_admin_notify_body($ctx) {
     $b .= !empty($ctx['marketing'])
         ? "○ 営業案内メールの受け取りに同意いただいています。\n"
         : "× 営業案内メールの受け取りには同意されていません。\n  今回のお申し込みへのご対応以外の営業メールは送らないでください（特定電子メール法）。\n";
-    $b .= "\n管理画面「お問い合わせ → 申込一覧」からも確認できます。";
+    $b .= "\n管理画面「電気工事反響フォーム → 反響一覧」からも確認できます。";
     return $b;
 }
 
@@ -952,7 +934,7 @@ function eaf_settings_page() {
       .fhs-recipes .fhs-copy{white-space:nowrap}
     </style>
     <div class="wrap">
-        <h1>お問い合わせフォーム 設定</h1>
+        <h1>電気工事反響フォーム 設定</h1>
         <?php if (isset($_GET['testmail'])) {
             $tm_ok = ($_GET['testmail'] === '1');
             $tm_to = isset($_GET['to']) ? sanitize_email(wp_unslash($_GET['to'])) : '';
@@ -989,9 +971,7 @@ function eaf_settings_page() {
         </p>
         <h2 class="nav-tab-wrapper" id="fhs-tabs">
             <a href="#" class="nav-tab nav-tab-active" data-tab="basic">基本設定</a>
-            <a href="#" class="nav-tab" data-tab="company">対応会社</a>
             <a href="#" class="nav-tab" data-tab="fields">入力項目</a>
-            <a href="#" class="nav-tab" data-tab="privacy">個人情報</a>
             <a href="#" class="nav-tab" data-tab="mail">自動返信メール</a>
             <a href="#" class="nav-tab" data-tab="style">デザイン</a>
             <a href="#" class="nav-tab" data-tab="usage">使い方</a>
@@ -1001,8 +981,16 @@ function eaf_settings_page() {
 
             <div class="fhs-tabpanel" data-tab="basic">
             <table class="form-table">
-                <tr><th>サイト名</th><td><input type="text" name="<?php echo EAF_OPT; ?>[site_name]" value="<?php echo esc_attr(eaf_opt('site_name', '株式会社e.Amber')); ?>" size="40">
-                    <p class="description">メールの件名や差し込みに使われます。</p></td></tr>
+                <tr><th>会社名（サイト名）</th><td><input type="text" name="<?php echo EAF_OPT; ?>[site_name]" value="<?php echo esc_attr(eaf_opt('site_name', '株式会社e.Amber')); ?>" size="40">
+                    <p class="description">メールの件名・本文の署名、フォームの利用目的の主語に使われます。運営と施工が同じ会社なので、会社名はこの1箇所だけです。</p></td></tr>
+                <tr><th>電話番号（お客様向け）</th><td>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[operator_contact]" value="<?php echo esc_attr(eaf_opt('operator_contact')); ?>" size="40" placeholder="例：055-000-0000">
+                    <p class="description"><strong>フォームの冒頭</strong>（お急ぎの方はお電話ください）と<strong>受付完了メールの末尾</strong>に表示されます。工事の問い合わせは急ぎが多く、電話が最短の導線です。</p></td></tr>
+                <tr><th>問い合わせメール</th><td>
+                    <input type="email" name="<?php echo EAF_OPT; ?>[operator_email]" value="<?php echo esc_attr(eaf_opt('operator_email')); ?>" size="40" placeholder="info@example.com">
+                    <p class="description">受付完了メールの末尾に載る、お客様からの問い合わせ先です。通知を受け取る「通知先メール（担当者）」とは別に指定できます。</p></td></tr>
+                <tr><th>所在地</th><td><input type="text" name="<?php echo EAF_OPT; ?>[operator_address]" value="<?php echo esc_attr(eaf_opt('operator_address')); ?>" size="50" placeholder="例：山梨県甲府市○○1-2-3">
+                    <p class="description">受付完了メールの末尾の署名に載ります（任意）。</p></td></tr>
                 <tr><th>送信元メール</th><td><input type="email" name="<?php echo EAF_OPT; ?>[from_email]" value="<?php echo esc_attr(eaf_opt('from_email')); ?>" size="40" placeholder="<?php echo esc_attr(get_option('admin_email')); ?>">
                     <p class="description">お客様への受付完了メールの差出人。空欄ならWordPressの既定の差出人になります。到達率のため WP Mail SMTP 等で SPF/DKIM を設定してください。</p></td></tr>
                 <tr><th>通知先メール（担当者）</th><td>
@@ -1043,60 +1031,14 @@ function eaf_settings_page() {
                 <tr><th>利用規約・免責URL</th><td><input type="url" name="<?php echo EAF_OPT; ?>[terms_url]" value="<?php echo esc_attr(eaf_opt('terms_url')); ?>" size="50"></td></tr>
             </table>
             </div>
-<div class="fhs-tabpanel" data-tab="company" style="display:none">
-            <h3>対応会社</h3>
-            <p class="description" style="max-width:900px">
-                ここに入れた内容が、<strong>フォーム下部の「対応会社」の欄</strong>と
-                <strong>受付完了メールの末尾</strong>に表示されます。<br>
-                お客様が「どこの会社に連絡先を渡すのか」を判断する材料になります。
-                工事を担当する会社が別にある場合は、<strong>その会社の情報</strong>を入れてください。
-            </p>
-            <table class="form-table">
-                <tr><th>会社名</th><td><input type="text" name="<?php echo EAF_OPT; ?>[operator_name]" value="<?php echo esc_attr(eaf_opt('operator_name')); ?>" size="40" placeholder="例：株式会社e.Amber">
-                    <p class="description">フォームとメールに表示されます。<strong>お客様が「どこの会社に連絡先を渡すのか」を判断する材料</strong>なので、必ずご記入ください。</p></td></tr>
-                <tr><th>所在地</th><td><input type="text" name="<?php echo EAF_OPT; ?>[operator_address]" value="<?php echo esc_attr(eaf_opt('operator_address')); ?>" size="50" placeholder="例：山梨県甲府市○○1-2-3"></td></tr>
-                <tr><th>会社サイトURL</th><td>
-                    <input type="url" name="<?php echo EAF_OPT; ?>[operator_url]" value="<?php echo esc_attr(eaf_opt('operator_url')); ?>" size="50" placeholder="https://example.com/">
-                    <p class="description">
-                        フォームとメールに表示されます。お客様が会社を調べられるようにしておくと、
-                        <strong>連絡先を預ける不安が減り、申し込みが増えます</strong>。
-                    </p>
-                </td></tr>
-                <tr><th>電話番号</th><td>
-                    <input type="text" name="<?php echo EAF_OPT; ?>[operator_contact]" value="<?php echo esc_attr(eaf_opt('operator_contact')); ?>" size="40" placeholder="例：055-000-0000"><br>
-                    <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_contact]" value="1" <?php checked(eaf_flag('show_contact', false)); ?>> この連絡先を<strong>フォームにも表示する</strong></label>
-                    <p class="description">
-                        <strong>ふだんはオフのままを推奨します。</strong>申し込みフォームに電話番号があると、
-                        フォームを送らずに電話で済ませる方が出て、<strong>申し込み数が減ります</strong>（どこから来たお客様かも分からなくなります）。<br>
-                        オフでも、<strong>受付完了メールには必ず記載されます</strong>ので、お客様が連絡できなくなることはありません。
-                    </p>
-                </td></tr>
-                <tr><th>問い合わせメール</th><td>
-                    <input type="email" name="<?php echo EAF_OPT; ?>[operator_email]" value="<?php echo esc_attr(eaf_opt('operator_email')); ?>" size="40" placeholder="info@example.com">
-                    <p class="description">
-                        受付完了メールの末尾に載る、お客様からの問い合わせ先です。<br>
-                        <span class="description">※申し込みの通知を受け取る「通知先メール（担当者）」とは別に指定できます。</span>
-                    </p>
-                </td></tr>
-                <tr><th>会社の画像</th><td>
-                    <?php echo eaf_image_field('company_image', true); ?>
-                    <p class="description">
-                        フォーム下部の「対応会社」の欄で、<strong>会社名・所在地の左に丸く表示されます</strong>。<br>
-                        会社ロゴ、店舗の外観、担当者の顔写真など。<strong>正方形の画像</strong>を用意してください
-                        （正方形でなくても中央を正方形に切り出して丸くします）。空欄なら表示しません。
-                    </p>
-                </td></tr>
-            </table>
-            </div>
-
-
             <div class="fhs-tabpanel" data-tab="fields" style="display:none">
             <h3>入力項目の設定</h3>
             <p class="description" style="background:#f0f6fc;border-left:4px solid #2271b1;padding:10px 12px;max-width:860px">
                 項目ごとに <strong>必須／任意／非表示</strong> を選べます。<br>
                 <strong>項目を増やすほど申込数は減り、リードの質は上がります。</strong>まずは必須を絞り、
                 足りない情報は担当者がお電話で聞く運用をおすすめします。<br>
-                ※ <strong>メールアドレス・工事内容・現場の市町村・同意チェック</strong>は常に必須です（連絡と見積りに不可欠なため、切り替えできません）。
+                ※ <strong>工事内容・現場の市町村・同意チェック</strong>は常に必須です（連絡と見積りに不可欠なため、切り替えできません）。<br>
+                ※ <strong>メールアドレスは常に任意</strong>です。ご入力があったお客様にだけ受付完了メールを送ります（電話が主戦場のため、必須にして離脱させません）。
             </p>
             <?php
             $groups = array(
@@ -1163,7 +1105,7 @@ function eaf_settings_page() {
 
             <h4 style="margin:26px 0 6px">見せ方</h4>
             <table class="form-table"><tr><th>ステップ表示</th><td>
-                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[step_form]" value="1" <?php checked(eaf_flag('step_form', true)); ?>> お問い合わせページのフォームを「お困りの内容 → ご状況 → ご連絡先」の3ステップに分けて表示する</label>
+                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[step_form]" value="1" <?php checked(eaf_flag('step_form', true)); ?>> お問い合わせページのフォームを「お困りの内容 → ご連絡先」の2ステップに分けて表示する</label>
                 <p class="description">
                     一画面に全部並べるより<strong>途中離脱が減ります</strong>（大手の問い合わせフォームはほぼこの形です）。<br>
                     進み具合のバーが出て、「次へ進む」を押すたびにその画面の必須項目だけを確認します。
@@ -1174,51 +1116,10 @@ function eaf_settings_page() {
 
             <h4 style="margin:26px 0 6px">そのほかの欄</h4>
             <table class="form-table"><tr><th>表示する項目</th><td>
-                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_note]" value="1" <?php checked(eaf_flag('show_note', true)); ?>> 「備考・ご要望」の自由入力欄</label><br>
+                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_note]" value="1" <?php checked(eaf_flag('show_note', false)); ?>> 「備考・ご要望」の自由入力欄（★「症状・ご希望」と重複するため既定はオフ）</label><br>
                 <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_marketing]" value="1" <?php checked(eaf_flag('show_marketing', true)); ?>> 「営業案内メールを希望」チェック欄</label>
                 <p class="description">営業案内メールのチェックは<strong>同意の証拠</strong>になります（特定電子メール法）。オフにすると、今回の申し込み以外の営業メールは送れません。</p>
             </td></tr></table>
-            </div>
-
-            <div class="fhs-tabpanel" data-tab="privacy" style="display:none">
-            <h3>個人情報の取り扱い</h3>
-            <p class="description" style="background:#fcf0f1;border-left:4px solid #b32d2e;padding:10px 12px;max-width:860px">
-                このフォームは<strong>お名前・電話番号</strong>を受け取るため、
-                <strong>個人情報保護法の義務があります</strong>。とくに、集めた情報を
-                <strong>他社（提携する会社など）に渡す場合は、お客様の同意が必要です（個情法27条）。</strong>
-            </p>
-            <table class="form-table">
-                <tr><th>他社へ情報を渡しますか</th><td>
-                    <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[third_party]" value="1" <?php checked(eaf_flag('third_party', false)); ?>> 提携する会社などに、お客様の情報を提供する</label>
-                    <p class="description">
-                        <strong>ONにすると</strong>、フォームの利用目的と同意文に「提携先へ提供すること」が明記され、
-                        お客様の同意チェックがその同意を兼ねる形になります。<br>
-                        <strong>OFFのまま他社に渡すのは違法です。</strong>自社内だけで対応する場合はOFFのままにしてください。
-                    </p>
-                </td></tr>
-                <tr><th>提供先の説明</th><td>
-                    <input type="text" name="<?php echo EAF_OPT; ?>[third_party_name]" value="<?php echo esc_attr(eaf_opt('third_party_name')); ?>" size="60" placeholder="例：当社が提携する電気工事会社">
-                    <p class="description">上をONにしたときにフォームへ表示されます。<strong>具体的に書くほど信頼されます。</strong>空欄なら「当社が提携する会社」と表示します。</p>
-                </td></tr>
-                <tr><th>提供先を説明したページ</th><td>
-                    <input type="url" name="<?php echo EAF_OPT; ?>[third_party_url]" value="<?php echo esc_attr(eaf_opt('third_party_url')); ?>" size="60" placeholder="https://example.com/partners/">
-                    <p class="description">
-                        提携会社の一覧ページや、提携会社での個人情報の取り扱いを説明したページのURL。<br>
-                        指定すると、上の「提供先の説明」がフォーム上で<strong>リンクになります</strong>。<br>
-                        <strong>提携先が1社だけなら、ここは空欄で構いません。</strong>上の「提供先の説明」に会社名が書いてあれば、
-                        お客様は「どこに渡るか」を判断できます。<br>
-                        一覧ページが要るのは<strong>提携先が複数あって、渡る先がその場で特定できない場合</strong>です。<br>
-                        なお、<strong>提携先のプライバシーポリシーを自社サイトに載せる義務はありません</strong>。それは提携先自身が公表すべきものです。
-                    </p>
-                </td></tr>
-            </table>
-            <h4>フォームに自動表示される内容</h4>
-            <p class="description">下記はコードで固定されており、消せません（同意の取得に必要なため）。</p>
-            <ul style="list-style:disc;margin-left:20px;max-width:860px">
-                <li>個人情報の利用目的（お問い合わせへの対応とご連絡のため）</li>
-                <li>同意チェック（プライバシーポリシー・免責事項へのリンク付き）</li>
-                <li>対応会社（会社名・所在地・サイト）※「対応会社」タブに入れた項目のみ</li>
-            </ul>
             </div>
 
             <div class="fhs-tabpanel" data-tab="mail" style="display:none">
@@ -1232,11 +1133,11 @@ function eaf_settings_page() {
                     <p class="description">
                         空欄にして保存すると初期文面に戻ります。使える差し込みタグ：<br>
                         <code>{site_name}</code> <code>{customer_name}</code> <code>{customer_details}</code>（お客様情報のまとまり） <code>{property_details}</code>（工事内容のまとまり） <code>{ptype}</code>（工事内容） <code>{address}</code>（市町村） <code>{email}</code> <code>{tel}</code><br>
-                        <span class="description">※会社名・電話などの署名は<strong>本文に書く必要はありません</strong>。「対応会社」タブの内容がメール末尾に自動で入ります（本文に書くと二重になるため、書かれていても取り除きます）。</span>
+                        <span class="description">※会社名・電話などの署名は<strong>本文に書く必要はありません</strong>。「基本設定」タブの会社名・電話番号・問い合わせメール・所在地がメール末尾に自動で入ります（本文に書くと二重になるため、書かれていても取り除きます）。</span>
                     </p>
                     <p class="description" style="background:#f0f6fc;border-left:4px solid #2271b1;padding:10px 12px;margin-top:10px">
-                        <strong>メールの末尾には「対応会社の連絡先」が自動で付きます。</strong><br>
-                        内容は<a href="#" class="fhs-gotab" data-tab="company">対応会社</a>タブのものです。
+                        <strong>メールの末尾には会社の連絡先（署名）が自動で付きます。</strong><br>
+                        内容は<a href="#" class="fhs-gotab" data-tab="basic">基本設定</a>タブのものです。
                         本文には<strong>ご案内したい内容だけ</strong>をお書きください。
                     </p>
                 </td></tr>
@@ -1413,14 +1314,15 @@ function eaf_settings_page() {
 
             <h3>問い合わせ後の動き</h3>
             <ol>
-                <li>お客様に<strong>受付完了メール</strong>を自動返信（内容は「自動返信メール」タブで編集可）</li>
+                <li>メール入力があったお客様に<strong>受付完了メール</strong>を自動返信（内容は「自動返信メール」タブで編集可）</li>
                 <li><strong>通知先メール（担当者）</strong>に問い合わせ内容を通知（営業連絡の可否つき）</li>
                 <li>担当者がお客様へ連絡し、日程・見積りをご案内</li>
             </ol>
 
             <h3 style="color:#b32d2e">法的な注意</h3>
             <p class="description" style="max-width:900px">
-                集めたお名前・電話番号を<strong>他社に渡す場合は「個人情報」タブの設定を必ずONにしてください</strong>（同意なしの第三者提供は違法です）。
+                このフォームは<strong>自社対応の前提</strong>で作られており、同意文にも「第三者に提供することはありません」と明記されます。
+                集めたお名前・電話番号を<strong>同意なく他社に渡すのは違法です</strong>（個情法27条）。
                 公開前に弁護士等の確認を推奨します。
             </p>
             </div>
@@ -1568,11 +1470,11 @@ function eaf_leads_page() {
     $rows = $wpdb->get_results("SELECT * FROM $table ORDER BY id DESC LIMIT 200");
     $total = (int)$wpdb->get_var("SELECT COUNT(*) FROM $table");
     $export = wp_nonce_url(admin_url('admin-post.php?action=eaf_export_leads'), 'eaf_export_leads');
-    echo '<div class="wrap"><h1>お問い合わせ 一覧</h1>';
+    echo '<div class="wrap"><h1>反響一覧</h1>';
     if (isset($_GET['deleted'])) echo '<div class="notice notice-success is-dismissible"><p>削除しました。</p></div>';
     $dberr = get_option('eaf_last_db_error');
     if ($dberr) echo '<div class="notice notice-error"><p><strong>直近に保存エラーが発生しました：</strong> ' . esc_html($dberr) . '<br>最新版に更新すると自動修復を試みます。解消されない場合は、この赤いメッセージの文面を共有してください。</p></div>';
-    echo '<p>申込件数：' . $total . ' 件（表示は最新200件）　<a class="button button-primary" href="' . esc_url($export) . '">CSVエクスポート（Excel）</a></p>';
+    echo '<p>反響件数：' . $total . ' 件（表示は最新200件）　<a class="button button-primary" href="' . esc_url($export) . '">CSVエクスポート（Excel）</a></p>';
     echo '<p class="description">個人情報を含みます。CSVの取り扱いにご注意ください。「営業可」が空欄のお客様には、今回の申し込みへの対応以外の営業メールを送らないでください。</p>';
     echo '<table class="widefat striped"><thead><tr>';
     echo '<th>受付日時</th><th>お名前</th><th>電話</th><th>メール</th><th>工事内容</th><th>市町村</th><th>建物</th><th>時期</th><th>詳細</th><th>営業可</th><th>操作</th></tr></thead><tbody>';
@@ -1583,11 +1485,11 @@ function eaf_leads_page() {
         $g = function ($v) { return ($v !== null && $v !== '') ? $v : '-'; };
         printf('<tr><td>%s</td><td><strong>%s</strong></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
              . '<td style="white-space:pre-line;font-size:12px;line-height:1.5">%s</td><td>%s</td>'
-             . '<td><a href="%s" onclick="return confirm(\'この申し込みを削除しますか？\')" style="color:#b32d2e">削除</a></td></tr>',
+             . '<td><a href="%s" onclick="return confirm(\'この反響を削除しますか？\')" style="color:#b32d2e">削除</a></td></tr>',
             esc_html($r->created_at),
             esc_html($g(isset($r->name) ? $r->name : '')),
             esc_html($g(isset($r->tel) ? $r->tel : '')),
-            esc_html($r->email),
+            esc_html($g($r->email)),
             esc_html($plabel),
             esc_html($g(isset($r->address) ? $r->address : '')),
             esc_html($g(isset($r->building) ? $r->building : '')),
@@ -1680,14 +1582,18 @@ function eaf_ajax() {
     $ptype   = sanitize_text_field($_POST['ptype'] ?? '');
     // 市町村は必須のセレクト。選択肢外の値はフォーム改ざんとみなして弾く
     $address = sanitize_text_field($_POST['address'] ?? '');
-    $email   = sanitize_email($_POST['email'] ?? '');
-    $note    = eaf_flag('show_note', true) ? sanitize_textarea_field($_POST['note_text'] ?? '') : '';
+    // sanitize_email は不正な形式を空文字にしてしまう。「入力したのに黙って捨てられた」を
+    // 防ぐため、生の入力が空かどうかを先に控えておき、形式エラーはエラーとして返す
+    $email_raw = trim((string) wp_unslash($_POST['email'] ?? ''));
+    $email     = sanitize_email($email_raw);
+    $note    = eaf_flag('show_note', false) ? sanitize_textarea_field($_POST['note_text'] ?? '') : '';
     $agree   = !empty($_POST['agree']);
     $mkt     = eaf_flag('show_marketing', true) && !empty($_POST['marketing']);
 
     $errors = array();
     if (!$agree) $errors[] = '個人情報の取扱いへの同意が必要です。';
-    if (!is_email($email)) $errors[] = 'メールアドレスの形式が正しくありません。';
+    // メールは任意。入力があったときだけ形式を見る（電話が主戦場のため必須にしない）
+    if ($email_raw !== '' && !is_email($email)) $errors[] = 'メールアドレスの形式が正しくありません。';
     if ($address === '' || !in_array($address, eaf_opt_list('city'), true)) $errors[] = 'お住まい・現場の市町村を選択してください。';
     if (!isset($GLOBALS['EAF_PTYPE_LABEL'][$ptype])) $errors[] = '工事内容を選択してください。';
 
@@ -1843,12 +1749,12 @@ function eaf_ajax() {
         'marketing' => $mkt,
     );
 
-    // 受付完了メール（お客様へ）
+    // 受付完了メール（お客様へ）。メール未入力なら送らない（折り返しは電話で行う）
     $site = eaf_opt('site_name', '株式会社e.Amber');
     $from = eaf_opt('from_email');
     $headers = array('Content-Type: text/plain; charset=UTF-8');
     if ($from) $headers[] = 'From: ' . $site . ' <' . $from . '>';
-    $mail_ok = wp_mail($email, eaf_mail_subject(), eaf_mail_body($ctx), $headers);
+    $mail_ok = ($email !== '') ? wp_mail($email, eaf_mail_subject(), eaf_mail_body($ctx), $headers) : false;
 
     // 担当者通知
     if (eaf_flag('notify_on', true)) {
@@ -1961,26 +1867,22 @@ function eaf_shortcode($atts = array()) {
     // compact では必須項目だけに絞る（メインビジュアル横などに収めるため）
     $cust_fields = eaf_visible_fields('customer',  eaf_customer_fields(),  $compact);
     $situ_fields = eaf_visible_fields('situation', eaf_situation_fields(), $compact);
-    $show_note   = eaf_flag('show_note', true) && !$compact;
+    $show_note   = eaf_flag('show_note', false) && !$compact;
     $show_mkt    = eaf_flag('show_marketing', true) && !$compact;
 
-    /* ステップ表示。一画面に20項目並ぶと身構えられるので、
-       「お困りの内容 → ご状況 → ご連絡先」の順に小分けにする（個人情報は必ず最後）。
+    /* ステップは2つだけ:「お困りの内容（概要）→ ご連絡先（個人情報）」。
+       画面を増やすほど離脱するため、聞くことは1画面目にまとめ、個人情報は必ず最後に置く。
        compact とティザーは元々短いので分けない。 */
-    $step2       = ($situ_fields || $show_note);            // 中身が無ければ2ステップ目は作らない
     $stepped     = !$teaser && !$compact && eaf_flag('step_form', true);
-    $step_titles = $step2 ? array('お困りの内容', 'ご状況', 'ご連絡先')
-                          : array('お困りの内容', 'ご連絡先');
+    $step_titles = array('お困りの内容', 'ご連絡先');
 
-    // 第三者提供の有無で、利用目的と同意文の書き方を変える（個情法27条）
-    $tp      = eaf_flag('third_party', false);
-    $tp_name = eaf_opt('third_party_name', '当社が提携する会社');
-    $tp_url  = eaf_opt('third_party_url', '');
-    // 提供先の説明。ページがあればリンクにして、渡す相手を確認できるようにする
-    $tp_label = $tp_url
-        ? '<a href="' . esc_url($tp_url) . '" target="_blank" rel="noopener">' . esc_html($tp_name) . '</a>'
-        : esc_html($tp_name);
-    $op_name = eaf_opt('operator_name', '当社');
+    /* 第三者提供の設定は持たない（運営＝施工＝同じ会社の自社サイトに置くフォームのため）。
+       同意文・利用目的は「自社が対応・連絡に使う」の一本に固定する。 */
+    $op_name = eaf_opt('site_name', '当社');
+    /* 急ぎのお客様には電話が最短なので、電話番号はフォームの一番上に出す
+       （本気査定は「電話で済まされると申込が減る」ため伏せていたが、
+        自社サイトの工事問い合わせでは電話も同じ受注。隠す理由がない）。 */
+    $op_tel = eaf_opt('operator_contact', '');
 
     $ptype_options = '<option value="">選択してください</option>';
     foreach ($GLOBALS['EAF_PTYPE_LABEL'] as $k => $v) {
@@ -1992,9 +1894,6 @@ function eaf_shortcode($atts = array()) {
         $p = $privacy ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>' : 'プライバシーポリシー';
         $t = $terms ? '<a href="' . esc_url($terms) . '" target="_blank" rel="noopener">免責事項</a>' : '免責事項';
         $agree_label = $p . 'および' . $t . 'に同意します（必須）';
-    }
-    if ($tp) {
-        $agree_label = '上記の個人情報の取り扱い（' . $tp_label . 'への提供を含む）に同意し、' . $agree_label;
     }
 
     /** 工事内容のタイル選択（1タップで選べるようにする。セレクトより離脱が少ない） */
@@ -2095,6 +1994,9 @@ function eaf_shortcode($atts = array()) {
     .fhs-opt{background:#eef1f5;color:#6b7280}
     .fhs-req.fhs-done{background:var(--fhs-brand);color:#fff;border-radius:50%;width:20px;height:20px;padding:0;font-size:12px;justify-content:center}
     .fhs-lead{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:10px;padding:14px 16px;font-size:16px;color:#374151;margin-bottom:20px;white-space:pre-line}
+    /* フォーム冒頭の電話案内。急ぎの読者が最初に目にする位置に置く */
+    .fhs-telbar{background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:10px;padding:13px 16px;font-size:16px;font-weight:700;color:var(--fhs-ink);margin-bottom:16px;text-align:center}
+    .fhs-telbar a{color:var(--fhs-brand);font-size:19px;text-decoration:none;white-space:nowrap}
     .fhs-section{display:flex;align-items:center;font-weight:800;font-size:21px;color:var(--fhs-ink);margin:34px 0 10px;padding-left:12px;border-left:5px solid var(--fhs-brand);line-height:1.45;letter-spacing:.01em}
     .fhs-form > .fhs-section:first-child{margin-top:0}
     /* ★チェックボックス・ラジオは対象外にする。padding や角丸が乗ると、
@@ -2133,16 +2035,6 @@ function eaf_shortcode($atts = array()) {
     /* ハニーポット：display:none だと一部のボットに読まれるため画面外へ逃がす */
     .fhs-hp{position:absolute!important;left:-9999px!important;top:auto;width:1px;height:1px;overflow:hidden}
     .fhs-privacy-note{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:9px;padding:13px 15px;font-size:14px;color:#4b5563;line-height:1.75;margin-top:16px}
-    .fhs-operator{margin-top:18px;padding-top:16px;border-top:1px solid var(--fhs-line);font-size:14px;color:#4b5563;line-height:1.9}
-    .fhs-operator-t{font-weight:700;color:var(--fhs-ink);margin-bottom:4px;font-size:15px}
-    .fhs-operator span{display:inline-block;min-width:6.5em;padding-right:10px;color:var(--fhs-muted)}
-    .fhs-operator a{color:var(--fhs-brand)}
-    .fhs-operator-name{font-weight:700;color:var(--fhs-ink);font-size:15px;margin-bottom:2px}
-    /* 会社の画像は正方形に切り出して丸く見せる（縦横比が違っても中央でトリミング） */
-    .fhs-operator-body{display:flex;align-items:center;gap:16px}
-    .fhs-wrap .fhs-opimg{width:72px;height:72px;flex:0 0 72px;border-radius:50%;object-fit:cover;object-position:center;background:#f6f8fa;border:1px solid var(--fhs-line);padding:0}
-    .fhs-operator-info{min-width:0}
-    @media(max-width:480px){.fhs-wrap .fhs-opimg{width:56px;height:56px;flex:0 0 56px}.fhs-operator-body{gap:12px}}
     .fhs-err{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;padding:10px 12px;border-radius:9px;margin-bottom:10px;font-size:16px}
     .fhs-spec{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
     .fhs-spec th,.fhs-spec td{border-bottom:1px solid var(--fhs-line);padding:12px 10px;text-align:left}
@@ -2293,7 +2185,7 @@ function eaf_shortcode($atts = array()) {
 <?php if ($t_badge !== ''): ?>
           <div class="fhs-tbadge-row"><span class="fhs-tbadge"><?php echo esc_html($t_badge); ?></span></div>
 <?php endif; ?>
-          <div class="fhs-ttitle"><?php if ($t_logo): ?><img class="fhs-ticon" src="<?php echo esc_url($t_logo); ?>" alt="<?php echo esc_attr(eaf_opt('operator_name', '')); ?>"><?php endif; ?><?php echo esc_html($t_title); ?></div>
+          <div class="fhs-ttitle"><?php if ($t_logo): ?><img class="fhs-ticon" src="<?php echo esc_url($t_logo); ?>" alt="<?php echo esc_attr(eaf_opt('site_name', '')); ?>"><?php endif; ?><?php echo esc_html($t_title); ?></div>
 <?php if ($t_sub !== ''): ?>
           <div class="fhs-tsub"><?php echo esc_html($t_sub); ?></div>
 <?php endif; ?>
@@ -2319,6 +2211,9 @@ function eaf_shortcode($atts = array()) {
                それは遷移先の本フォーム・完了画面・自動返信メールに必ず表示される。 */ ?>
     </form>
 <?php else: /* ===== 通常のフォーム ===== */ ?>
+<?php if ($op_tel !== ''): ?>
+    <div class="fhs-telbar">お急ぎの方はお電話が早いです：<a href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>"><?php echo esc_html($op_tel); ?></a></div>
+<?php endif; ?>
 <?php $lead = eaf_opt('lead_text'); if ($lead !== ''): ?>
     <div class="fhs-lead"><?php echo esc_html($lead); ?></div>
 <?php endif; ?>
@@ -2363,12 +2258,8 @@ function eaf_shortcode($atts = array()) {
 <?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
       </div>
 <?php endforeach; ?>
-<?php if ($stepped): ?></div><?php endif; /* step 1 ここまで */ ?>
-
-<?php if ($step2): ?>
-<?php if ($stepped): ?><div class="fhs-formstep" data-step="2" style="display:none"><?php endif; ?>
+<?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>
 <?php if ($situ_fields): ?>
-      <div class="fhs-section">ご状況</div>
       <div class="fhs-group">
 <?php   foreach ($situ_fields as $fd) { echo $render_field($fd, 'situation_', $uid); } ?>
       </div>
@@ -2378,35 +2269,28 @@ function eaf_shortcode($atts = array()) {
       <label for="<?php echo esc_attr($uid . '-note'); ?>">備考・ご要望<span class="fhs-opt">任意</span></label>
       <textarea name="note_text" id="<?php echo esc_attr($uid . '-note'); ?>" rows="2" placeholder="ご不明な点、ご希望などがあればご記入ください"></textarea>
 <?php endif; ?>
-<?php if ($stepped): ?></div><?php endif; /* step 2 ここまで */ ?>
-<?php endif; ?>
+<?php if ($stepped): ?></div><?php endif; /* step 1 ここまで */ ?>
 
-<?php if ($stepped): ?><div class="fhs-formstep" data-step="<?php echo $step2 ? 3 : 2; ?>" style="display:none"><?php endif; ?>
+<?php if ($stepped): ?><div class="fhs-formstep" data-step="2" style="display:none"><?php endif; ?>
       <div class="fhs-section">ご連絡先</div>
 <?php if ($cust_fields): ?>
       <div class="fhs-group">
 <?php   foreach ($cust_fields as $fd) { echo $render_field($fd, 'customer_', $uid); } ?>
       </div>
 <?php endif; ?>
-      <label for="<?php echo esc_attr($uid . '-email'); ?>">メールアドレス<span class="fhs-req">必須</span></label>
-      <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email" required>
+      <label for="<?php echo esc_attr($uid . '-email'); ?>">メールアドレス<span class="fhs-opt">任意</span></label>
+      <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email">
+      <div class="fhs-hint">ご入力いただくと、受付内容の控えをメールでお送りします</div>
 
       <?php /* 個人情報の利用目的の明示（個情法21条）。同意を求める直前に必ず出す。
-               プライバシーポリシーURLが未設定でも、最低限ここで目的が伝わるようにしておく。
-               第三者提供がONのときは、提供先と提供する旨を必ず書く（個情法27条）。 */ ?>
+               プライバシーポリシーURLが未設定でも、最低限ここで目的が伝わるようにしておく。 */ ?>
       <div class="fhs-privacy-note">
         <strong>個人情報の取り扱いについて</strong><br>
         ご入力いただいた内容は、<?php echo esc_html($op_name); ?>が<strong>お問い合わせへの対応とご連絡、およびそれに関するご案内</strong>のために利用します。<br>
-<?php if ($tp): ?>
-        また、対応・ご提案のため、<strong><?php echo $tp_label; ?></strong>にご入力内容（お名前・ご連絡先・工事内容）を提供します。
-        提供先での取り扱いは、提供先の定めによります。ご同意いただけない場合は、送信をお控えください。<br>
-<?php else: ?>
         ご本人の同意なく第三者に提供することはありません。<br>
-<?php endif; ?>
-        削除をご希望の場合は、<?php echo (eaf_opt('operator_contact', '') !== '' && eaf_flag('show_contact', false))
-            ? '下記の連絡先'
-            : ($privacy ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>に記載の窓口'
-                        : '当社の窓口'); ?>までお申し付けください。
+        削除をご希望の場合は、<?php echo $privacy
+            ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>に記載の窓口'
+            : '当社の窓口'; ?>までお申し付けください。
       </div>
 
       <div class="fhs-check">
@@ -2434,39 +2318,9 @@ function eaf_shortcode($atts = array()) {
     </form>
 <?php endif; /* ===== 分岐ここまで ===== */ ?>
 
-<?php if (!$teaser): ?>
-<?php /* 申し込みフォームには免責を置かない。ここでは価格を一切示しておらず、
-         申し込みをためらわせるだけになるため。
-         免責は「価格の話が始まる場面」＝受付完了メールと完了画面に出す。 */ ?>
-<?php
-    /* 対応する会社の明示。お客様が「どこの誰に連絡先を渡すのか」を
-       判断する材料になる。設定済みの項目だけを出す。 */
-    $op_disp = eaf_opt('operator_name', '');
-    $op_addr = eaf_opt('operator_address', ''); $op_tel = eaf_opt('operator_contact', '');
-    $op_img  = eaf_opt('company_image', '');
-    $op_url  = eaf_opt('operator_url', '');
-    $op_mail = eaf_opt('operator_email', '');
-    $op_tel_shown = ($op_tel !== '' && eaf_flag('show_contact', false));
-    if ($op_disp || $op_addr || $op_url || $op_tel_shown):
-?>
-    <div class="fhs-operator">
-      <div class="fhs-operator-t">対応会社</div>
-      <div class="fhs-operator-body">
-<?php if ($op_img): ?>
-        <img class="fhs-opimg" src="<?php echo esc_url($op_img); ?>" alt="<?php echo esc_attr($op_disp); ?>" loading="lazy">
-<?php endif; ?>
-        <div class="fhs-operator-info">
-<?php if ($op_disp): ?>          <div class="fhs-operator-name"><?php echo esc_html($op_disp); ?></div>
-<?php endif; if ($op_addr): ?>          <div><span>所在地</span><?php echo esc_html($op_addr); ?></div>
-<?php endif; if ($op_url !== ''): ?>          <div><span>サイト</span><a href="<?php echo esc_url($op_url); ?>" target="_blank" rel="noopener"><?php echo esc_html(preg_replace('#^https?://#', '', rtrim($op_url, '/'))); ?></a></div>
-<?php endif; if ($op_tel_shown): ?>          <div><span>お問い合わせ</span><?php echo esc_html($op_tel); ?></div>
-<?php endif; if ($op_tel_shown && $op_mail !== ''): ?>          <div><span>メール</span><?php echo esc_html($op_mail); ?></div>
-<?php endif; ?>
-        </div>
-      </div>
-    </div>
-<?php endif; ?>
-<?php endif; /* !$teaser ここまで */ ?>
+<?php /* 会社紹介の欄はあえて置かない。このフォームは自社サイトに置く前提で、
+         「どこの会社か」はサイト自体が示している（本気査定のような
+         運営と査定会社が別のケースではないため）。 */ ?>
   </div>
 
   <div class="fhs-card fhs-result" style="display:none"></div>
@@ -2544,7 +2398,8 @@ function eaf_shortcode($atts = array()) {
     return (lbl && lbl.tagName === 'LABEL') ? lbl.querySelector('.fhs-req') : null;
   }
 
-  // 画面の並び順に：工事内容 → 市町村 → 選択中の内容の必須項目 → その他の必須項目 → メール
+  // 画面の並び順に：工事内容 → 市町村 → 選択中の内容の必須項目 → その他の必須項目
+  // ★メールは任意なのでここには入れない（形式チェックはステップ送りと送信時に行う）
   function currentRequired(){
     var req = [];
     if (form.elements['ptype'])   req.push(form.elements['ptype']);
@@ -2555,7 +2410,6 @@ function eaf_shortcode($atts = array()) {
       if (g) Array.prototype.forEach.call(g.querySelectorAll('[data-req="1"]'), function(el){ req.push(el); });
     }
     Array.prototype.forEach.call(form.querySelectorAll('.fhs-group:not([data-ptype]) [data-req="1"]'), function(el){ req.push(el); });
-    if (form.elements['email'])   req.push(form.elements['email']);
     return req;
   }
 
@@ -2624,12 +2478,15 @@ function eaf_shortcode($atts = array()) {
   function missingIn(i){
     if (!STEPPED) return [];
     var box = steps[i], out = [];
-    var els = box.querySelectorAll('select[name="ptype"], select[name="address"], input[name="email"], [data-req="1"]');
+    var els = box.querySelectorAll('select[name="ptype"], select[name="address"], [data-req="1"]');
     Array.prototype.forEach.call(els, function(el){
       if (!el.offsetParent && el.type !== 'hidden') return;      // 表示されていない種別の欄は対象外
       if (el.closest('.fhs-group[data-ptype]') && el.closest('.fhs-group[data-ptype]').style.display === 'none') return;
       if (!fieldOk(el)) out.push(el);
     });
+    // メールは任意。ただし入力があって形式が違うときだけ止める
+    var em = box.querySelector('input[name="email"]');
+    if (em && em.value.trim() !== '' && !fieldOk(em)) out.push(em);
     var agree = box.querySelector('input[name="agree"]');
     if (agree && !agree.checked) out.push(agree);
     return out;
@@ -2819,14 +2676,16 @@ function eaf_shortcode($atts = array()) {
     try { sessionStorage.removeItem(HANDOFF_KEY); } catch (e) {}
     var rows = (d.name ? '<tr><th>お名前</th><td>'+esc(d.name)+' 様</td></tr>' : '')
       + (d.tel ? '<tr><th>電話番号</th><td>'+esc(d.tel)+'</td></tr>' : '')
-      + '<tr><th>メール</th><td>'+esc(d.email)+'</td></tr>'
+      + (d.email ? '<tr><th>メール</th><td>'+esc(d.email)+'</td></tr>' : '')
       + '<tr><th>工事内容</th><td>'+esc(d.ptype_label)+'</td></tr>'
       + (d.address ? '<tr><th>現場の市町村</th><td>'+esc(d.address)+'</td></tr>' : '');
     var det = d.confirm_text
       ? '<div class="fhs-hint" style="white-space:pre-line;margin-top:10px">'+esc(d.confirm_text)+'</div>' : '';
-    var mailLine = d.mail_ok
-      ? '<p class="fhs-ok">✓ '+esc(d.email)+' 宛に受付完了メールをお送りしました。</p>'
-      : '<p class="fhs-hint">お申し込みは完了しています（確認メールの送信に失敗した可能性があります。担当より別途ご連絡します）。</p>';
+    var mailLine = !d.email
+      ? '<p class="fhs-hint">担当者よりお電話にて折り返しご連絡します。</p>'
+      : (d.mail_ok
+        ? '<p class="fhs-ok">✓ '+esc(d.email)+' 宛に受付完了メールをお送りしました。</p>'
+        : '<p class="fhs-hint">お問い合わせは完了しています（確認メールの送信に失敗した可能性があります。担当より別途ご連絡します）。</p>');
     var html = '<h3 style="margin-top:0">お問い合わせを受け付けました</h3>'
       + '<div class="fhs-next-note"><strong>このあとの流れ</strong><br>担当者が内容を確認し、ご入力いただいたご連絡先へご連絡いたします。'
       + '営業時間の都合により、お時間をいただく場合があります。</div>'

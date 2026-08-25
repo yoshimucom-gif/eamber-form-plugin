@@ -45,7 +45,7 @@ t('ティザー(横長)',                     $has(eaf_shortcode(array('design' 
 t('ティザー(縦)',                       $has(eaf_shortcode(array('design' => 'teaser-v', 'url' => '/contact/'))), false);
 
 update_option(EAF_OPT, eaf_sanitize_options(array(
-    'operator_name' => 'テスト電気工事店', 'operator_contact' => '086-000-0000',
+    'site_name' => 'テスト電気工事店', 'operator_contact' => '086-000-0000',
 )));
 $mail = eaf_mail_body(array('name' => '山田', 'customer_details' => '', 'property_details' => ''));
 t('自動返信メール',                     $has($mail), false);
@@ -58,7 +58,7 @@ t('会社名も入る',               strpos($mail, 'テスト電気工事店') 
 // 本文を書き換えても消えない（テンプレートの外で連結しているため）
 update_option(EAF_OPT, eaf_sanitize_options(array(
     'mail_body' => 'ご案内だけの本文',
-    'operator_name' => 'テスト電気工事店', 'operator_contact' => '086-000-0000',
+    'site_name' => 'テスト電気工事店', 'operator_contact' => '086-000-0000',
 )));
 $mail2 = eaf_mail_body(array('name' => '山田'));
 t('本文を書き換えても連絡先は付く', strpos($mail2, '本件に関するお問い合わせは下記まで') !== false, true);

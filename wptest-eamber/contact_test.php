@@ -1,8 +1,11 @@
 <?php
 /**
- * フォーム上の問い合わせ先（電話番号）の表示制御。
- * 既定は非表示。フォームに電話番号があると、送信せず電話で済ませる人が出て
- * 申し込み数が落ちるため。メールには必ず載せる。
+ * 電話番号の表示制御。
+ *
+ * 本気査定は「電話で済まされると申込が減る」ため電話をフォームで伏せていたが、
+ * eamber-form は自社サイトの工事問い合わせ＝電話も同じ受注なので方針が逆:
+ * 電話番号（operator_contact）が設定されていれば、フォームの一番上に
+ * 「お急ぎの方はお電話が早いです」を必ず出す（設定フラグは無い）。
  */
 $GLOBALS['FAKE_STATE_FILE'] = __DIR__ . '/contact_state.json';
 @unlink($GLOBALS['FAKE_STATE_FILE']);
@@ -16,40 +19,31 @@ function t($n, $g, $w) {
 }
 function set_opts($a) { update_option(EAF_OPT, eaf_sanitize_options($a)); }
 
-$base = array(
-    'operator_name'    => '株式会社e.Amber',
-    'operator_address' => '山梨県甲府市○○1-2-3',
-    'operator_contact' => '055-000-0000',
-    'privacy_url'      => 'https://example.test/privacy',
-);
+/* --- 1. 電話未設定なら電話バーは出ない --- */
+set_opts(array());
+$h0 = eaf_shortcode(array());
+t('未設定なら電話バーは出ない', strpos($h0, 'お急ぎの方はお電話が早いです') !== false, false);
 
-/* --- 既定（未設定）ではフォームに出ない --- */
-set_opts($base);
-$html = eaf_shortcode(array());
-t('既定ではフォームに電話番号を出さない', strpos($html, '055-000-0000') !== false, false);
-t('会社名は出る',   strpos($html, '株式会社e.Amber') !== false, true);
-t('所在地も出る',   strpos($html, '山梨県甲府市○○1-2-3') !== false, true);
-t('削除依頼はポリシーへ案内', strpos($html, 'に記載の窓口までお申し付けください') !== false, true);
+/* --- 2. 電話を設定するとフォーム冒頭に出る --- */
+set_opts(array('operator_contact' => '055-000-0000'));
+$h1 = eaf_shortcode(array());
+t('電話バーが出る',            strpos($h1, 'お急ぎの方はお電話が早いです') !== false, true);
+t('番号が表示される',          strpos($h1, '055-000-0000') !== false, true);
+t('tel:リンクになる',          strpos($h1, 'href="tel:0550000000"') !== false, true);
+t('冒頭（フォームより前）に出る', strpos($h1, 'お急ぎの方はお電話が早いです') < strpos($h1, '<form class="fhs-form">'), true);
 
-/* --- 受付完了メールには必ず載る --- */
-$mail = eaf_mail_body(array('name' => '山田', 'customer_details' => '', 'property_details' => ''));
-t('メールには電話番号が載る', strpos($mail, '055-000-0000') !== false, true);
+/* --- 3. card / compact でも出る。ティザーには出ない（入口は軽く保つ） --- */
+t('cardでも出る',       strpos(eaf_shortcode(array('design' => 'card')), 'お急ぎの方はお電話が早いです') !== false, true);
+t('compactでも出る',    strpos(eaf_shortcode(array('design' => 'compact')), 'お急ぎの方はお電話が早いです') !== false, true);
+t('ティザーには出ない', strpos(eaf_shortcode(array('design' => 'teaser', 'url' => '/contact/')), 'お急ぎの方はお電話が早いです') !== false, false);
 
-/* --- ONにすればフォームにも出る --- */
-set_opts($base + array('show_contact' => '1'));
-$html2 = eaf_shortcode(array('design' => 'card'));
-t('ONならフォームに出る',       strpos($html2, '055-000-0000') !== false, true);
-t('削除依頼は「下記の連絡先」', strpos($html2, '下記の連絡先までお申し付けください') !== false, true);
-
-/* --- 会社情報が名前だけでもブロックは出る／全部無ければ出ない --- */
-set_opts(array('operator_name' => '株式会社e.Amber'));
-t('名前だけでも会社欄は出る', strpos(eaf_shortcode(array('design' => 'compact')), '対応会社') !== false, true);
-set_opts(array('operator_contact' => '055-000-0000'));   // 連絡先だけ・非表示設定
-t('連絡先だけ かつ 非表示なら会社欄を出さない', strpos(eaf_shortcode(array('design' => 'teaser-v', 'url' => '/satei/')), '対応会社') !== false, false);
+/* --- 4. 旧 show_contact フラグは保存されない --- */
+set_opts(array('operator_contact' => '055-000-0000', 'show_contact' => '1'));
+$o = get_option(EAF_OPT, array());
+t('show_contact は保存されない', array_key_exists('show_contact', $o), false);
 
 /* --- 自己診断 --- */
-set_opts($base + array('show_contact' => '1'));
-t('自己診断: 検査が電話番号を見つけられる', strpos(eaf_shortcode(array('design' => 'card')), '055-000-0000') !== false, true);
+t('自己診断: 検査が電話番号を見つけられる', strpos($h1, '055-000-0000') !== false, true);
 
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 @unlink($GLOBALS['FAKE_STATE_FILE']);

@@ -33,9 +33,10 @@ C:/Users/yoshi/php-portable/php82/php.exe logo_test.php     # アイコン画像
 C:/Users/yoshi/php-portable/php82/php.exe multi_test.php    # 1ページに複数置いたときのid一意性とCSS/JSの重複防止
 C:/Users/yoshi/php-portable/php82/php.exe page_test.php     # お問い合わせページ(form)の自動作成とティザー遷移先の既定値
 C:/Users/yoshi/php-portable/php82/php.exe address_test.php  # 市町村セレクト（27市町村＋県外）
-C:/Users/yoshi/php-portable/php82/php.exe thirdparty_test.php # 第三者提供の表示と提供先リンク
+C:/Users/yoshi/php-portable/php82/php.exe step_email_test.php # 2ステップ構成とメール任意（送信の通し込み）
+C:/Users/yoshi/php-portable/php82/php.exe thirdparty_test.php # 第三者提供の機構が無いこと（削除の退行防止）
 C:/Users/yoshi/php-portable/php82/php.exe contact_test.php  # フォーム上の問い合わせ先の表示制御
-C:/Users/yoshi/php-portable/php82/php.exe companyimg_test.php # 対応会社の画像（丸トリミング）
+C:/Users/yoshi/php-portable/php82/php.exe companyimg_test.php # 会社欄・会社画像が無いこと（削除の退行防止）
 C:/Users/yoshi/php-portable/php82/php.exe spam_test.php     # スパム判定（誤爆しないことを厚めに検査）
 C:/Users/yoshi/php-portable/php82/php.exe company_test.php  # 対応会社の設定タブとメール末尾の連絡先
 C:/Users/yoshi/php-portable/php82/php.exe security_test.php # ★権限・CSRF・XSS・CSV注入を実際に攻撃して確かめる

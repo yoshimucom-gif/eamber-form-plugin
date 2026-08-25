@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.0.3
+ * Version: 1.0.4
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.0.3');
+define('EAF_VER', '1.0.4');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -394,7 +394,7 @@ function eaf_form_url() {
  *   「コードの既定を変えたのに、保存済みの環境では何も変わらない」状態になる。
  *   ここを上げた更新では、保存済みのモードを一度だけ捨てて既定に戻す。
  */
-define('EAF_FIELD_DEFAULTS_VER', '2');   // 2 = 既定を「必須項目だけ表示」に整理
+define('EAF_FIELD_DEFAULTS_VER', '3');   // 3 = 表示の切替（備考欄）とフォーク元の名残も戻す
 
 function eaf_maybe_reset_field_modes() {
     if (get_option('eaf_field_defaults_ver') === EAF_FIELD_DEFAULTS_VER) return;
@@ -403,6 +403,12 @@ function eaf_maybe_reset_field_modes() {
         foreach (array_keys($o) as $k) {
             if (strpos($k, 'mode_') === 0) unset($o[$k]);
         }
+        /* ★モード以外の「表示する項目」も同じ理由で戻す。
+           mode_ だけ消しても、備考欄のように別フラグで出ている欄は残ってしまう。 */
+        unset($o['show_note']);
+        /* フォーク元（不動産の査定フォーム）の既定が保存されたままの環境があるため、
+           その値そのものだったときだけ捨てる。手で入れた社名は壊さない。 */
+        if (isset($o['site_name']) && $o['site_name'] === '不動産査定') unset($o['site_name']);
         update_option(EAF_OPT, $o);
     }
     update_option('eaf_field_defaults_ver', EAF_FIELD_DEFAULTS_VER);
@@ -2121,6 +2127,8 @@ function eaf_shortcode($atts = array()) {
     .fhs-group{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;align-items:start}
     .fhs-field{min-width:0}
     .fhs-field.fhs-full{grid-column:1/-1}
+    /* 1つしか出ていない組は半分幅だと市町村の欄と揃わず、崩れて見える */
+    .fhs-group > .fhs-field:only-child{grid-column:1/-1}
     .fhs-field > label:first-child{margin-top:16px}
     @media(max-width:560px){.fhs-group{grid-template-columns:1fr}}
     .fhs-hint{color:var(--fhs-muted);font-size:14px;margin-top:5px;line-height:1.7}
@@ -2221,7 +2229,9 @@ function eaf_shortcode($atts = array()) {
        選びやすさより網羅性を優先している。min() を挟まないと狭い端末で列が縮まない。 */
     .fhs-ptype-field{margin:0 0 6px}
     .fhs-tile-q{display:flex;align-items:center;flex-wrap:wrap;font-weight:800;font-size:19px;color:var(--fhs-ink);margin:0 0 12px;line-height:1.5}
-    .fhs-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:10px}
+    /* ★3列固定。auto-fit にすると広い画面で7列＋2列のような割れ方をして、
+       タイルが横に伸びきり一覧として読みづらくなる。9枚なので3×3がきれいに収まる。 */
+    .fhs-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
     .fhs-wrap .fhs-tile-input,.fhs-wrap input[type=radio].fhs-tile-input{position:absolute;opacity:0;width:1px;height:1px;padding:0;border:0;pointer-events:none;appearance:none;-webkit-appearance:none}
     .fhs-wrap .fhs-tile{
       display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;
@@ -2282,7 +2292,7 @@ function eaf_shortcode($atts = array()) {
       .fhs-design-teaser .fhs-thead{text-align:center}
       .fhs-design-teaser .fhs-ttexts{justify-content:center}
       .fhs-design-teaser .fhs-ttags{order:0;flex:1 1 100%;margin-left:0;margin-bottom:2px;justify-content:center}
-      /* 1列にすると9枚で画面が縦に伸びきるので、狭い端末でも2列は保つ */
+      /* 3列だと1枚あたりが狭すぎて代表例が読めなくなるので、狭い端末は2列 */
       .fhs-tiles{grid-template-columns:repeat(2,1fr);gap:8px}
       .fhs-wrap .fhs-tile{min-height:0;padding:13px 8px}
       .fhs-ttitle{font-size:19px}
@@ -2385,6 +2395,16 @@ function eaf_shortcode($atts = array()) {
         <?php echo $render_ptype_tiles($uid, 'ptype', true, $uid . '-ptq'); ?>
       </div>
 
+      <?php /* ★工事内容ごとの質問はタイルのすぐ下に置く。
+               押したタイルへの返事なので、市町村を挟むと話が飛んで見える。 */ ?>
+<?php foreach (eaf_property_fields() as $pt => $flds):
+        $vis = eaf_visible_fields('prop_' . $pt, $flds, $compact);
+        if (!$vis) continue; ?>
+      <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
+<?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
+      </div>
+<?php endforeach; ?>
+
       <label for="<?php echo esc_attr($uid . '-address'); ?>">お住まい・現場の市町村<span class="fhs-req">必須</span></label>
       <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" required>
         <option value="">選択してください</option>
@@ -2393,14 +2413,6 @@ function eaf_shortcode($atts = array()) {
 <?php endforeach; ?>
       </select>
       <div class="fhs-hint">番地までは不要です。詳しい場所は折り返しの際にうかがいます</div>
-
-<?php foreach (eaf_property_fields() as $pt => $flds):
-        $vis = eaf_visible_fields('prop_' . $pt, $flds, $compact);
-        if (!$vis) continue; ?>
-      <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
-<?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
-      </div>
-<?php endforeach; ?>
 <?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>
 <?php if ($situ_fields): ?>
       <div class="fhs-group">
@@ -2547,17 +2559,17 @@ function eaf_shortcode($atts = array()) {
     return (lbl && lbl.tagName === 'LABEL') ? lbl.querySelector('.fhs-req') : null;
   }
 
-  // 画面の並び順に：市町村 → 選択中の内容の必須項目 → その他の必須項目
+  // 画面の並び順に：選択中の内容の必須項目 → 市町村 → その他の必須項目
   // ★工事内容（タイル）はラジオなのでこの一覧には入れず、updateFormState で個別に見る
   // ★メールは任意なのでここには入れない（形式チェックはステップ送りと送信時に行う）
   function currentRequired(){
     var req = [];
-    if (form.elements['address']) req.push(form.elements['address']);
     var pt = ptypeValue();
     if (pt) {
       var g = wrap.querySelector('.fhs-group[data-ptype="' + pt + '"]');
       if (g) Array.prototype.forEach.call(g.querySelectorAll('[data-req="1"]'), function(el){ req.push(el); });
     }
+    if (form.elements['address']) req.push(form.elements['address']);
     Array.prototype.forEach.call(form.querySelectorAll('.fhs-group:not([data-ptype]) [data-req="1"]'), function(el){ req.push(el); });
     return req;
   }

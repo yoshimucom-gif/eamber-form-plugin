@@ -85,12 +85,24 @@ t('「その他」の自由記述は必須', $ot_def, 'req');
 $o = get_option(EAF_OPT, array());
 $o['mode_situation_building'] = 'req';        // 旧版で保存された状態を再現
 $o['mode_customer_contact_time'] = 'opt';
+$o['show_note'] = '1';                        // 備考欄はモードではなく別フラグで出る
+$o['site_name'] = '不動産査定';                // フォーク元の既定が保存されたまま
 update_option(EAF_OPT, $o);
 delete_option('eaf_field_defaults_ver');       // 未移行の環境を再現
 t('移行前は保存値が効いている', eaf_mode('situation', 'building', 'off'), 'req');
+t('移行前は備考欄が出てしまう',   eaf_flag('show_note', false), true);
 eaf_maybe_reset_field_modes();
 t('移行で保存値が捨てられ既定に戻る', eaf_mode('situation', 'building', 'off'), 'off');
+t('備考欄も既定（非表示）に戻る',     eaf_flag('show_note', false), false);
+t('フォーク元の社名も捨てる',         eaf_opt('site_name', '株式会社e.Amber'), '株式会社e.Amber');
 t('移行は版を記録して二度実行しない', get_option('eaf_field_defaults_ver'), EAF_FIELD_DEFAULTS_VER);
+/* ★捨てるのは「フォーク元の既定そのもの」だけ。手で入れた社名まで消してはいけない */
+$o = get_option(EAF_OPT, array());
+$o['site_name'] = '株式会社e.Amber 山梨営業所';
+update_option(EAF_OPT, $o);
+delete_option('eaf_field_defaults_ver');
+eaf_maybe_reset_field_modes();
+t('自分で入れた社名は捨てない', eaf_opt('site_name', ''), '株式会社e.Amber 山梨営業所');
 $o = get_option(EAF_OPT, array());
 $o['mode_situation_building'] = 'req';         // 移行後に吉村さんが自分で戻した状態
 update_option(EAF_OPT, $o);

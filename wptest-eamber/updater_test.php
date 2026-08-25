@@ -50,10 +50,10 @@ function t($name, $got, $want) {
     printf("%s %s\n     got=%s want=%s\n", $ok ? 'OK  ' : 'NG  ', $name, var_export($got, true), var_export($want, true));
 }
 
-t('cron中(管理画面外)でもチェッカーが読み込まれている', class_exists('EAF_Honki_Updater'), true);
+t('cron中(管理画面外)でもチェッカーが読み込まれている', class_exists('EAF_Updater'), true);
 t('更新チェックのフックが登録されている', has_action('pre_set_site_transient_update_plugins'), true);
 
-$updater = new EAF_Honki_Updater(dirname(__DIR__) . '/eamber-form/eamber-form.php', EAF_UPDATE_URL);
+$updater = new EAF_Updater(dirname(__DIR__) . '/eamber-form/eamber-form.php', EAF_UPDATE_URL);
 $basename = 'eamber-form/eamber-form.php';
 
 /* 1) インストール済みが最新（1.0.0）＝更新なし */
@@ -67,7 +67,7 @@ if (isset($tr->no_update[$basename])) {
 /* 2) 配信側が新しい場合＝更新エントリが入るか（プラグインヘッダーを古く見せて再現） */
 function get_plugin_data_old() {}   // 参照用
 $GLOBALS['FAKE_OLD'] = true;
-$updater2 = new EAF_Honki_Updater(__DIR__ . '/fake_old_plugin.php', EAF_UPDATE_URL);
+$updater2 = new EAF_Updater(__DIR__ . '/fake_old_plugin.php', EAF_UPDATE_URL);
 file_put_contents(__DIR__ . '/fake_old_plugin.php', "<?php\n/**\n * Plugin Name: dummy\n * Version: 0.9.0\n */\n");
 $tr2 = $updater2->check_for_update((object)array('response' => array(), 'no_update' => array()));
 $key = basename(__DIR__) . '/fake_old_plugin.php';

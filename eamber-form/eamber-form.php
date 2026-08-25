@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.0.4
+ * Version: 1.0.5
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.0.4');
+define('EAF_VER', '1.0.5');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -139,6 +139,18 @@ function eaf_teaser_fields() {
         'address' => array('label' => '市町村',        'type' => 'select', 'opts' => 'city'),
         'timing'  => array('label' => 'ご希望の時期',   'type' => 'select', 'opts' => 'timing'),
     );
+}
+
+/**
+ * 横幅の指定を CSS の値に正規化する。数字だけなら px を補う。
+ * 受け付けられない書き方のときは空文字を返し、呼び出し側の既定に任せる
+ * （壊れた値をそのまま style に入れると、レイアウトが無言で崩れるため）。
+ */
+function eaf_parse_width($w) {
+    $w = trim((string) $w);
+    if ($w === '') return '';
+    if (preg_match('/^\d+$/', $w)) $w .= 'px';
+    return preg_match('/^\d+(px|%|em|rem|vw)$/', $w) ? $w : '';
 }
 
 /** 「見積り無料, 出張費込み, 相談だけOK」のような文字列をタグの配列に。
@@ -569,6 +581,7 @@ function eaf_sanitize_options($in) {
         'teaser_badge'     => sanitize_text_field($in['teaser_badge'] ?? ''),
         'teaser_tags'      => sanitize_text_field($in['teaser_tags'] ?? ''),
         'form_page_id'    => (int) ($in['form_page_id'] ?? 0),
+        'form_width'       => sanitize_text_field($in['form_width'] ?? ''),
         // 自動返信メール
         'mail_subject'     => sanitize_text_field($in['mail_subject'] ?? ''),
         'mail_body'        => sanitize_textarea_field($in['mail_body'] ?? ''),
@@ -1257,6 +1270,19 @@ function eaf_settings_page() {
             </div>
 
             <div class="fhs-tabpanel" data-tab="style" style="display:none">
+            <h3>フォームの横幅</h3>
+            <table class="form-table">
+                <tr><th>お問い合わせページのフォーム</th><td>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[form_width]" value="<?php echo esc_attr(eaf_opt('form_width')); ?>" size="12" placeholder="680"> px
+                    <p class="description">
+                        数字だけならpx（例 <code>680</code>）。<code>100%</code> のような書き方もできます。<strong>空欄なら 680px</strong>で、フォームは中央に寄ります。<br>
+                        <strong>広げすぎると、工事内容のタイルが1枚ずつ大きくなって一覧として見渡しにくくなります。</strong>
+                        本文幅が広いテーマでは、ここで絞るほうが選びやすくなります。<br>
+                        <span class="description">※ そのフォームだけ変えたいときは、ショートコードに <code>width="820"</code> を足してください（ティザーにも使えます）。</span>
+                    </p>
+                </td></tr>
+            </table>
+
             <h3>ティザーの見出し</h3>
             <p class="description">記事に置く入口フォーム（ティザー）の見出しまわりの設定です。<strong>空欄にした項目は表示されません。</strong></p>
             <table class="form-table">
@@ -1318,7 +1344,7 @@ function eaf_settings_page() {
                 <thead><tr><th style="width:170px">用途</th><th>ショートコード</th></tr></thead>
                 <tbody>
                 <tr><td><strong>標準</strong></td>
-                    <td><code>[eamber_form]</code><br><span class="description">全項目・幅100%・枠なし。</span></td></tr>
+                    <td><code>[eamber_form]</code><br><span class="description">全項目・枠なし。幅は「デザイン」タブの設定（未設定なら680px）で、中央に寄ります。</span></td></tr>
                 <tr><td><strong>コンパクト</strong><br><span class="description">サイドバー等</span></td>
                     <td><code>[eamber_form design="compact"]</code><br><span class="description">必須項目のみ・幅440pxのカード。</span></td></tr>
                 <tr><td><strong>カード</strong></td>
@@ -1349,7 +1375,8 @@ function eaf_settings_page() {
                     <span class="description">同じサイト内なら <code>url="/○○○/form/"</code> のように <code>/</code> で始まる書き方でも構いません。</span></td></tr>
                 <tr><td><code>fields</code></td><td>聞く項目と順番。<code>ptype</code>（工事内容）/ <code>address</code>（市町村）/ <code>timing</code>（希望時期）から選ぶ。省略時は <code>ptype,address</code><br>
                     <span class="description">※ <strong>お名前・電話番号・メールはティザーには置けません。</strong>個人情報は、利用目的の明示と同意チェックがあるお問い合わせページで受け取る決まりにしているためです。</span></td></tr>
-                <tr><td><code>width</code></td><td>横幅。<strong>省略時は横長＝本文の幅いっぱい、縦＝440px</strong>（どちらも中央寄せ）。<code>width="820"</code> のように数字だけ書けばpx、<code>width="100%"</code> も指定できます。<br>
+                <tr><td><code>width</code></td><td>横幅。<strong>ティザーだけでなく、標準・カード・コンパクトのどのフォームにも使えます。</strong><code>width="820"</code> のように数字だけ書けばpx、<code>width="100%"</code> も指定できます。<br>
+                    省略時は、標準・カードが<a href="#" class="fhs-gotab" data-tab="style">デザイン</a>タブの「フォームの横幅」（未設定なら680px）、ティザー横長が本文の幅いっぱい、ティザー縦とコンパクトが440px。いずれも中央寄せです。<br>
                     <span class="description">狭くすると入力欄は自動的に縦積みへ切り替わります（おおむね560px以下から）。</span></td></tr>
                 <tr><td><code>title</code></td><td>見出し（省略時：60秒でかんたん入力）</td></tr>
                 <tr><td><code>subtitle</code></td><td>小見出し（省略時は表示なし）</td></tr>
@@ -1415,7 +1442,7 @@ function eaf_settings_page() {
                 <strong>横長と縦の違い：</strong>横長（<code>teaser</code>）は<strong>入力欄が横一列に並びます</strong>。縦（<code>teaser-v</code>）は常に縦積みです。<br>
                 横長は幅が足りなくなると自動で縦積みに切り替わるので、スマホでもそのまま使えます。
             </p>
-            <p class="description">属性 <code>button</code> はどのデザインでも使えます。例：<code>[eamber_form button="無料で見積りを相談する"]</code></p>
+            <p class="description">属性 <code>button</code> と <code>width</code> はどのデザインでも使えます。例：<code>[eamber_form width="720" button="無料で見積りを相談する"]</code></p>
 
             <h3>問い合わせ後の動き</h3>
             <ol>
@@ -1934,15 +1961,23 @@ function eaf_shortcode($atts = array()) {
     $t_steps  = ($a['steps'] !== '0' && $a['steps'] !== '');
     $t_fields = $teaser ? eaf_parse_teaser_fields($a['fields']) : array();
 
-    /* ティザーの横幅。数字だけなら px として扱う（width="500"）。
-       width="100%" で本文の幅いっぱいにもできる。既定は横長500px / 縦440px。 */
-    $t_width = '';
-    if ($teaser) {
-        $w = trim((string)$a['width']);
-        if ($w !== '' && preg_match('/^\d+$/', $w)) $w .= 'px';
-        // 横長は入力欄を横に並べるため、既定は本文の幅いっぱい。縦は440px
-        if (!preg_match('/^\d+(px|%|em|rem|vw)$/', $w)) $w = ($design === 'teaser-v') ? '440px' : '100%';
-        $t_width = $w;
+    /**
+     * 横幅。数字だけなら px として扱う（width="680"）。width="100%" も指定できる。
+     *
+     * ★ティザーだけでなく本体フォームにも効かせる。テーマによっては本文が
+     *   1400px 以上あり、そのままだとタイルが1枚ずつ巨大になって
+     *   「一覧をひと目で見渡す」というタイルの利点が消える。
+     * 優先順位: ショートコードの width → 設定「フォームの横幅」→ デザインごとの既定。
+     */
+    $t_width = eaf_parse_width($a['width']);
+    if ($t_width === '') {
+        if ($design === 'teaser')          $t_width = '100%';   // 横一列に並べるので本文幅いっぱい
+        elseif ($design === 'teaser-v')    $t_width = '440px';
+        elseif ($design === 'compact')     $t_width = '440px';
+        else {
+            $t_width = eaf_parse_width(eaf_opt('form_width', ''));
+            if ($t_width === '') $t_width = '680px';
+        }
     }
 
     $c_brand    = eaf_opt('color_brand', '#1f6feb');
@@ -2095,7 +2130,7 @@ function eaf_shortcode($atts = array()) {
   echo $t_width ? ' style="max-width:' . esc_attr($t_width) . '"' : ''; ?>>
 <?php if ($need_assets): ?>
   <style>
-    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0;color:var(--fhs-ink);font-family:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","ヒラギノ丸ゴ ProN W4","Noto Sans JP","Hiragino Kaku Gothic ProN",sans-serif;line-height:1.75;font-size:17px}
+    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","ヒラギノ丸ゴ ProN W4","Noto Sans JP","Hiragino Kaku Gothic ProN",sans-serif;line-height:1.75;font-size:17px}
     /* テーマ側が box-sizing を当てているかどうかで、余白ぶん高さ・幅がずれる。
        このフォームの中だけは border-box に固定して、どのテーマでも同じ見た目にする。 */
     .fhs-wrap,.fhs-wrap *{box-sizing:border-box}
@@ -2162,8 +2197,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-ok{color:#0a7d33;font-weight:600;font-size:16px;margin-top:16px}
     .fhs-next-note{background:#eef6ff;border:1px solid #cfe3ff;border-radius:10px;padding:14px 16px;font-size:15px;color:#1c3d5a;margin-top:16px;line-height:1.8}
 
-    /* デザイン: compact */
-    .fhs-design-compact{max-width:440px}
+    /* デザイン: compact（横幅はPHP側でインラインに出すので、ここでは指定しない） */
     .fhs-design-compact .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:14px;padding:20px 18px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
     .fhs-design-compact label{font-size:16px;margin:12px 0 5px}
     .fhs-design-compact input,.fhs-design-compact select,.fhs-design-compact textarea{padding:11px 12px;font-size:16px}

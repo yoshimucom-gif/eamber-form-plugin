@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.0.4\n・タイルを3×3の並びに固定。広い画面で横に伸びきっていたのを直しました\n・工事内容ごとの質問を、押したタイルのすぐ下（市町村の上）に移動\n・1項目だけの質問が半分の幅になっていたのを全幅に\n・「備考・ご要望」が既定で出てしまう問題を修正。旧版で保存された表示設定が残っていたためで、この更新で一度だけ既定に戻ります"
+    "changelog": "1.0.5\n・フォームの横幅を指定できるようにしました（設定→デザイン→フォームの横幅）。既定は680pxで中央寄せです\n・ショートコードの width をすべてのデザインで使えるように。例: [eamber_form width=\"820\"]"
   }
 }

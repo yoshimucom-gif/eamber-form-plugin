@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.0.1');
+define('EAF_VER', '1.0.2');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -47,73 +47,77 @@ function eaf_customer_fields() {
         array('key'=>'name',         'label'=>'お名前',              'type'=>'text',   'col'=>'name',          'len'=>100, 'def'=>'req', 'ph'=>'例：山田 太郎'),
         array('key'=>'kana',         'label'=>'フリガナ',            'type'=>'text',   'col'=>'kana',          'len'=>100, 'def'=>'off', 'ph'=>'例：ヤマダ タロウ'),
         array('key'=>'tel',          'label'=>'電話番号',            'type'=>'tel',    'col'=>'tel',           'len'=>50,  'def'=>'req', 'ph'=>'例：090-1234-5678'),
-        array('key'=>'contact_time', 'label'=>'ご連絡しやすい時間帯', 'type'=>'select', 'col'=>'contact_time',  'len'=>50,  'def'=>'opt', 'opts'=>'contact_time'),
+        array('key'=>'contact_time', 'label'=>'ご連絡しやすい時間帯', 'type'=>'select', 'col'=>'contact_time',  'len'=>50,  'def'=>'off', 'opts'=>'contact_time'),
         array('key'=>'contact_way',  'label'=>'ご希望の連絡方法',     'type'=>'select', 'col'=>null,            'len'=>50,  'def'=>'off', 'opts'=>'contact_way'),
     );
 }
 
 /** ご状況（担当者が優先順位を付けるための情報）
  *  ★市町村はここに置かない。フォームの基幹項目（address）として最初のステップで聞く。
- *  ★必須は増やさない方針。既定で出すのは建物・時期・自由記述の3つだけで、
- *    残り（持ち家か賃貸か・いつから）は非表示が既定（管理画面で復活できる）。 */
+ *  ★既定はすべて非表示。フォームに並ぶのは必須項目だけにして、
+ *    聞きたいことが出てきたら管理画面で1つずつ足す（足すほど反響は減る）。 */
 function eaf_situation_fields() {
     return array(
-        array('key'=>'building',   'label'=>'建物の種類',            'type'=>'select', 'col'=>'building',  'len'=>50,  'def'=>'opt', 'opts'=>'building'),
+        array('key'=>'building',   'label'=>'建物の種類',            'type'=>'select', 'col'=>'building',  'len'=>50,  'def'=>'off', 'opts'=>'building'),
         array('key'=>'ownership',  'label'=>'持ち家か賃貸か',        'type'=>'select', 'col'=>'ownership', 'len'=>50,  'def'=>'off', 'opts'=>'ownership'),
         array('key'=>'since',      'label'=>'いつからの症状ですか',   'type'=>'select', 'col'=>null,        'len'=>50,  'def'=>'off', 'opts'=>'since'),
-        array('key'=>'timing',     'label'=>'ご希望の時期',          'type'=>'select', 'col'=>'timing',    'len'=>50,  'def'=>'opt', 'opts'=>'timing'),
-        array('key'=>'detail',     'label'=>'症状・ご希望',          'type'=>'textarea','col'=>'detail',   'len'=>2000,'def'=>'opt', 'ph'=>'例：2階の部屋のブレーカーだけ、エアコンを付けると落ちます'),
+        array('key'=>'timing',     'label'=>'ご希望の時期',          'type'=>'select', 'col'=>'timing',    'len'=>50,  'def'=>'off', 'opts'=>'timing'),
+        array('key'=>'detail',     'label'=>'症状・ご希望',          'type'=>'textarea','col'=>'detail',   'len'=>2000,'def'=>'off', 'ph'=>'例：2階の部屋のブレーカーだけ、エアコンを付けると落ちます'),
     );
 }
 
-/** 工事内容ごとの入力項目（内容によって聞くことが変わる） */
+/** 工事内容ごとの入力項目（内容によって聞くことが変わる）
+ *  ★既定で出すのは各内容の「1問だけ」。それ以外は非表示にしてある。
+ *    ここを増やすほど反響は減るので、足すときは1つずつ試すこと。 */
 function eaf_property_fields() {
     return array(
         'aircon' => array(
             array('key'=>'ac_work',    'label'=>'ご希望の作業',        'type'=>'select', 'def'=>'req', 'opts'=>'ac_work'),
-            array('key'=>'ac_floor',   'label'=>'設置する階',          'type'=>'select', 'def'=>'opt', 'opts'=>'ac_floor'),
-            array('key'=>'ac_outlet',  'label'=>'専用コンセントの有無', 'type'=>'select', 'def'=>'opt', 'opts'=>'yesno_unknown'),
-            array('key'=>'ac_body',    'label'=>'本体のご用意',        'type'=>'select', 'def'=>'opt', 'opts'=>'body_ready'),
+            array('key'=>'ac_floor',   'label'=>'設置する階',          'type'=>'select', 'def'=>'off', 'opts'=>'ac_floor'),
+            array('key'=>'ac_outlet',  'label'=>'専用コンセントの有無', 'type'=>'select', 'def'=>'off', 'opts'=>'yesno_unknown'),
+            array('key'=>'ac_body',    'label'=>'本体のご用意',        'type'=>'select', 'def'=>'off', 'opts'=>'body_ready'),
             array('key'=>'ac_model',   'label'=>'型番（分かれば）',     'type'=>'text',   'def'=>'off', 'ph'=>'例：AN-C223SE'),
         ),
         'breaker' => array(
             array('key'=>'br_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'req', 'opts'=>'br_symptom'),
-            array('key'=>'br_scope',   'label'=>'止まっている範囲',     'type'=>'select', 'def'=>'opt', 'opts'=>'br_scope'),
-            array('key'=>'br_smell',   'label'=>'焦げたにおいの有無',   'type'=>'select', 'def'=>'opt', 'opts'=>'yesno_unknown'),
+            array('key'=>'br_scope',   'label'=>'止まっている範囲',     'type'=>'select', 'def'=>'off', 'opts'=>'br_scope'),
+            array('key'=>'br_smell',   'label'=>'焦げたにおいの有無',   'type'=>'select', 'def'=>'off', 'opts'=>'yesno_unknown'),
             array('key'=>'br_wire',    'label'=>'単相2線式／3線式',     'type'=>'select', 'def'=>'off', 'opts'=>'wire_type'),
             array('key'=>'br_age',     'label'=>'分電盤の設置年（西暦）','type'=>'number','def'=>'off', 'ph'=>'例：1995'),
         ),
         'intercom' => array(
             array('key'=>'ic_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'req', 'opts'=>'ic_symptom'),
-            array('key'=>'ic_type',    'label'=>'いまの機種',          'type'=>'select', 'def'=>'opt', 'opts'=>'ic_type'),
-            array('key'=>'ic_want',    'label'=>'ご希望の機種',        'type'=>'select', 'def'=>'opt', 'opts'=>'ic_want'),
+            array('key'=>'ic_type',    'label'=>'いまの機種',          'type'=>'select', 'def'=>'off', 'opts'=>'ic_type'),
+            array('key'=>'ic_want',    'label'=>'ご希望の機種',        'type'=>'select', 'def'=>'off', 'opts'=>'ic_want'),
             array('key'=>'ic_year',    'label'=>'建物の築年（西暦）',   'type'=>'number', 'def'=>'off', 'ph'=>'例：2005'),
         ),
         'outlet' => array(
             array('key'=>'ol_work',    'label'=>'ご希望の作業',        'type'=>'select', 'def'=>'req', 'opts'=>'ol_work'),
-            array('key'=>'ol_count',   'label'=>'箇所数',              'type'=>'number', 'def'=>'opt', 'ph'=>'例：2'),
-            array('key'=>'ol_place',   'label'=>'設置場所',            'type'=>'select', 'def'=>'opt', 'opts'=>'ol_place'),
-            array('key'=>'ol_volt',    'label'=>'100Vか200Vか',        'type'=>'select', 'def'=>'opt', 'opts'=>'volt'),
+            array('key'=>'ol_count',   'label'=>'箇所数',              'type'=>'number', 'def'=>'off', 'ph'=>'例：2'),
+            array('key'=>'ol_place',   'label'=>'設置場所',            'type'=>'select', 'def'=>'off', 'opts'=>'ol_place'),
+            array('key'=>'ol_volt',    'label'=>'100Vか200Vか',        'type'=>'select', 'def'=>'off', 'opts'=>'volt'),
         ),
         'light' => array(
             array('key'=>'lt_work',    'label'=>'ご希望の作業',        'type'=>'select', 'def'=>'req', 'opts'=>'lt_work'),
-            array('key'=>'lt_count',   'label'=>'台数',                'type'=>'number', 'def'=>'opt', 'ph'=>'例：4'),
-            array('key'=>'lt_ceiling', 'label'=>'引掛シーリングの有無', 'type'=>'select', 'def'=>'opt', 'opts'=>'yesno_unknown'),
-            array('key'=>'lt_height',  'label'=>'天井が高い場所か',     'type'=>'select', 'def'=>'opt', 'opts'=>'yesno_unknown'),
+            array('key'=>'lt_count',   'label'=>'台数',                'type'=>'number', 'def'=>'off', 'ph'=>'例：4'),
+            array('key'=>'lt_ceiling', 'label'=>'引掛シーリングの有無', 'type'=>'select', 'def'=>'off', 'opts'=>'yesno_unknown'),
+            array('key'=>'lt_height',  'label'=>'天井が高い場所か',     'type'=>'select', 'def'=>'off', 'opts'=>'yesno_unknown'),
         ),
         'fan' => array(
             array('key'=>'fn_place',   'label'=>'設置場所',            'type'=>'select', 'def'=>'req', 'opts'=>'fn_place'),
-            array('key'=>'fn_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'opt', 'opts'=>'fn_symptom'),
-            array('key'=>'fn_type',    'label'=>'種類',                'type'=>'select', 'def'=>'opt', 'opts'=>'fn_type'),
+            array('key'=>'fn_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'off', 'opts'=>'fn_symptom'),
+            array('key'=>'fn_type',    'label'=>'種類',                'type'=>'select', 'def'=>'off', 'opts'=>'fn_type'),
         ),
         'business' => array(
             array('key'=>'bz_kind',    'label'=>'建物の用途',          'type'=>'select', 'def'=>'req', 'opts'=>'bz_kind'),
-            array('key'=>'bz_work',    'label'=>'ご検討の工事',        'type'=>'select', 'def'=>'opt', 'opts'=>'bz_work'),
-            array('key'=>'bz_stop',    'label'=>'停電させられる時間帯', 'type'=>'select', 'def'=>'opt', 'opts'=>'bz_stop'),
-            array('key'=>'bz_tenant',  'label'=>'テナント入居か自社物件か','type'=>'select','def'=>'opt','opts'=>'bz_tenant'),
+            array('key'=>'bz_work',    'label'=>'ご検討の工事',        'type'=>'select', 'def'=>'off', 'opts'=>'bz_work'),
+            array('key'=>'bz_stop',    'label'=>'停電させられる時間帯', 'type'=>'select', 'def'=>'off', 'opts'=>'bz_stop'),
+            array('key'=>'bz_tenant',  'label'=>'テナント入居か自社物件か','type'=>'select','def'=>'off','opts'=>'bz_tenant'),
         ),
+        /* ★その他だけは自由記述を必須にする。ここを非表示にすると
+           「その他・分からない」を選んだ人が何も伝えられないフォームになる。 */
         'other' => array(
-            array('key'=>'ot_note',    'label'=>'お困りの内容',        'type'=>'textarea','def'=>'opt', 'ph'=>'例：何が起きているか分かりませんが、時々部屋の電気が消えます'),
+            array('key'=>'ot_note',    'label'=>'お困りの内容',        'type'=>'textarea','def'=>'req', 'ph'=>'例：何が起きているか分かりませんが、時々部屋の電気が消えます'),
         ),
     );
 }
@@ -375,9 +379,32 @@ function eaf_form_url() {
     return $url ? $url : '';
 }
 
+/**
+ * 入力項目の既定値（必須／任意／非表示）の版。
+ *
+ * ★設定を一度でも保存すると、全項目のモードがDBに書き込まれる。
+ *   保存値は既定より優先されるので、これが無いと
+ *   「コードの既定を変えたのに、保存済みの環境では何も変わらない」状態になる。
+ *   ここを上げた更新では、保存済みのモードを一度だけ捨てて既定に戻す。
+ */
+define('EAF_FIELD_DEFAULTS_VER', '2');   // 2 = 既定を「必須項目だけ表示」に整理
+
+function eaf_maybe_reset_field_modes() {
+    if (get_option('eaf_field_defaults_ver') === EAF_FIELD_DEFAULTS_VER) return;
+    $o = get_option(EAF_OPT, array());
+    if (is_array($o)) {
+        foreach (array_keys($o) as $k) {
+            if (strpos($k, 'mode_') === 0) unset($o[$k]);
+        }
+        update_option(EAF_OPT, $o);
+    }
+    update_option('eaf_field_defaults_ver', EAF_FIELD_DEFAULTS_VER);
+}
+
 /* 自動更新でバージョンが上がったらテーブル定義を追従（新カラム追加等） */
 add_action('plugins_loaded', 'eaf_maybe_upgrade');
 function eaf_maybe_upgrade() {
+    eaf_maybe_reset_field_modes();
     if (get_option('eaf_db_ver') !== EAF_VER) {
         eaf_activate();
         update_option('eaf_db_ver', EAF_VER);

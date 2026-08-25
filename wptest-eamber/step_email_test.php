@@ -24,24 +24,64 @@ t('ステップは2つ',                substr_count($html, '<div class="fhs-for
 t('ステップ名は 概要→個人情報',    strpos($html, '["お困りの内容","ご連絡先"]') !== false, true);
 t('「ご状況」という中間ステップが無い', strpos($html, 'ご状況') !== false, false);
 
-/* ご状況の項目（建物の種類）は1画面目=data-step="1"の中にある */
+/* 工事内容別の必須（エアコンなら「ご希望の作業」）は1画面目=data-step="1"の中にある */
 $s1 = strpos($html, 'data-step="1"');
 $s2 = strpos($html, '<div class="fhs-formstep" data-step="2"');
-$bld = strpos($html, 'situation_building');
-t('建物の種類は1画面目にある', $s1 !== false && $s2 !== false && $bld !== false && $bld > $s1 && $bld < $s2, true);
+$acw = strpos($html, 'aircon__ac_work');
+t('工事内容別の必須は1画面目にある', $s1 !== false && $s2 !== false && $acw !== false && $acw > $s1 && $acw < $s2, true);
 $nm = strpos($html, 'customer_name');
 t('お名前は2画面目（最後）にある', $nm !== false && $nm > $s2, true);
 
-/* ================= 2. 既定の項目の絞り込み ================= */
-foreach (array('situation_ownership' => '持ち家か賃貸か', 'situation_since' => 'いつから',
-               'customer_contact_way' => '連絡方法', 'aircon__ac_model' => '型番',
-               'breaker__br_age' => '分電盤の設置年', 'intercom__ic_year' => '築年',
-               'note_text' => '備考・ご要望') as $key => $label) {
-    t('既定で出ない: ' . $label, strpos($html, 'name="' . $key . '"') !== false, false);
-}
-$bld_def = '';
-foreach (eaf_situation_fields() as $fd) if ($fd['key'] === 'building') $bld_def = $fd['def'];
-t('建物の種類は任意になっている', $bld_def, 'opt');
+/* ================= 2. 既定は「必須項目だけ」 =================
+   ★ホワイトリスト方式。項目を足したら、意図した増加かをここで必ず突きつける。
+   （ブラックリストで「これは出ない」と数えるやり方だと、
+     新しく増えた任意項目が黙って通ってしまう） */
+preg_match_all('/\sname="([^"]+)"/', $html, $m);
+$names = array_values(array_unique($m[1]));
+sort($names);
+$expected = array(
+    'address',            // 市町村（必須）
+    'agree',              // 同意（必須）
+    'aircon__ac_work',    // 工事内容別の必須 × 8種
+    'breaker__br_symptom',
+    'business__bz_kind',
+    'customer_name',      // お名前（必須）
+    'customer_tel',       // 電話番号（必須）
+    'eaf_website',        // ハニーポット（人には見えない）
+    'email',              // メール（任意・常に表示）
+    'fan__fn_place',
+    'intercom__ic_symptom',
+    'light__lt_work',
+    'marketing',          // 営業メール希望のチェック（任意）
+    'other__ot_note',
+    'outlet__ol_work',
+    'ptype',              // 工事内容（必須）
+);
+sort($expected);
+t('既定で出る入力欄は必須＋メール＋同意だけ', $names, $expected);
+
+/* その他だけは自由記述が必須（ここを非表示にすると何も伝えられなくなる） */
+$ot_def = '';
+foreach (eaf_property_fields()['other'] as $fd) if ($fd['key'] === 'ot_note') $ot_def = $fd['def'];
+t('「その他」の自由記述は必須', $ot_def, 'req');
+
+/* ================= 2b. 保存済みモードの一度きりのリセット =================
+   ★これが無いと「既定を変えたのに、一度でも設定を保存した環境では変わらない」。 */
+$o = get_option(EAF_OPT, array());
+$o['mode_situation_building'] = 'req';        // 旧版で保存された状態を再現
+$o['mode_customer_contact_time'] = 'opt';
+update_option(EAF_OPT, $o);
+delete_option('eaf_field_defaults_ver');       // 未移行の環境を再現
+t('移行前は保存値が効いている', eaf_mode('situation', 'building', 'off'), 'req');
+eaf_maybe_reset_field_modes();
+t('移行で保存値が捨てられ既定に戻る', eaf_mode('situation', 'building', 'off'), 'off');
+t('移行は版を記録して二度実行しない', get_option('eaf_field_defaults_ver'), EAF_FIELD_DEFAULTS_VER);
+$o = get_option(EAF_OPT, array());
+$o['mode_situation_building'] = 'req';         // 移行後に吉村さんが自分で戻した状態
+update_option(EAF_OPT, $o);
+eaf_maybe_reset_field_modes();
+t('移行後の設定は二度と壊さない', eaf_mode('situation', 'building', 'off'), 'req');
+update_option(EAF_OPT, eaf_sanitize_options(array()));   // 後続の検査のため既定へ戻す
 
 /* ================= 3. メール欄は任意 ================= */
 t('メール欄に required が無い', preg_match('/name="email"[^>]*\srequired/', $html) === 1, false);

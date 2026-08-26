@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.2.0');
+define('EAF_VER', '1.2.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -537,13 +537,15 @@ add_action('admin_enqueue_scripts', function ($hook) {
 });
 
 /**
- * 丸ゴシックの読み込み。
+ * 本文書体（Noto Sans JP）の読み込み。
  *
+ * ★丸ゴシックはフォームだけが浮いて見えたのでやめた。
+ *   やわらかさは角丸とタイルの配色で出し、字は本文になじむものにする。
  * ★ショートコードの中で enqueue すると、その時点で wp_head を過ぎているため
  *   スタイルがフッターに出て、一瞬だけ別の書体で描画される。
  *   本文にショートコードがあるかを wp_enqueue_scripts の時点で調べ、head に入れる。
  * ※ 読み込みたくない場合は、フィルタ eaf_load_font に false を返す。
- *   その場合も端末側の丸ゴシック（iOSのヒラギノ丸ゴ等）へ自動で落ちるだけで壊れない。
+ *   その場合はテーマの日本語ゴシックへ落ちるだけで、崩れはしない。
  */
 add_action('wp_enqueue_scripts', function () {
     if (!apply_filters('eaf_load_font', true)) return;
@@ -551,8 +553,8 @@ add_action('wp_enqueue_scripts', function () {
     $post = get_post();
     if (!$post || !has_shortcode((string) $post->post_content, 'eamber_form')) return;
     wp_enqueue_style(
-        'eaf-rounded-font',
-        'https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap',
+        'eaf-font',
+        'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap',
         array(),
         null
     );
@@ -2141,7 +2143,7 @@ function eaf_shortcode($atts = array()) {
   echo $t_width ? ' style="max-width:' . esc_attr($t_width) . '"' : ''; ?>>
 <?php if ($need_assets): ?>
   <style>
-    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","ヒラギノ丸ゴ ProN W4","Noto Sans JP","Hiragino Kaku Gothic ProN",sans-serif;line-height:1.75;font-size:17px}
+    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75;font-size:17px}
     /* テーマ側が box-sizing を当てているかどうかで、余白ぶん高さ・幅がずれる。
        このフォームの中だけは border-box に固定して、どのテーマでも同じ見た目にする。 */
     .fhs-wrap,.fhs-wrap *{box-sizing:border-box}
@@ -2159,11 +2161,11 @@ function eaf_shortcode($atts = array()) {
     /* フォーム冒頭の電話案内。急ぎの読者が最初に目にする位置に置く */
     .fhs-telbar{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:16px;padding:14px 16px;color:var(--fhs-ink);margin-bottom:18px;text-align:center}
     .fhs-telbar-msg{font-size:15px;font-weight:700;line-height:1.6}
-    .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-brand);font-size:27px;font-weight:800;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
+    .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-brand);font-size:27px;font-weight:700;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
     .fhs-wrap .fhs-telbar-num svg{width:22px;height:22px;flex:0 0 auto}
     .fhs-telbar-sub{font-size:12.5px;font-weight:500;color:var(--fhs-muted);line-height:1.6}
     @media(max-width:400px){.fhs-wrap .fhs-telbar-num{font-size:23px}}
-    .fhs-section{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;color:var(--fhs-ink);margin:34px 0 12px;line-height:1.45;letter-spacing:.01em}
+    .fhs-section{display:flex;align-items:center;gap:9px;font-weight:700;font-size:20px;color:var(--fhs-ink);margin:34px 0 12px;line-height:1.45;letter-spacing:.01em}
     .fhs-section::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--fhs-brand);flex:0 0 auto}
     .fhs-form > .fhs-section:first-child{margin-top:0}
     /* ★チェックボックス・ラジオは対象外にする。padding や角丸が乗ると、
@@ -2185,7 +2187,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-check{display:flex;gap:9px;align-items:flex-start;margin-top:14px}
     .fhs-wrap .fhs-check input[type=checkbox]{margin-top:5px;transform:scale(1.25);flex:0 0 auto}
     .fhs-check label{margin:0;font-weight:400;font-size:16px}
-    .fhs-wrap button{margin-top:24px;width:100%;background:var(--fhs-btn-bg);color:var(--fhs-btn-text);border:0;border-radius:999px;padding:18px;font-size:20px;font-weight:800;cursor:pointer;box-shadow:0 6px 16px rgba(30,26,21,.18);transition:transform .12s,filter .15s}
+    .fhs-wrap button{margin-top:24px;width:100%;background:var(--fhs-btn-bg);color:var(--fhs-btn-text);border:0;border-radius:999px;padding:18px;font-size:20px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(30,26,21,.18);transition:transform .12s,filter .15s}
     .fhs-wrap button:active{transform:translateY(1px)}
     /* ステップ表示。★.fhs-step はティザーの「STEP 1」バッジが使っているので別名にすること */
     .fhs-wrap .fhs-formstep{display:block}
@@ -2262,7 +2264,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-design-teaser .fhs-ttags{order:3;flex:0 1 auto;margin-left:auto;margin-bottom:0}
     .fhs-design-teaser .fhs-tsub{order:4}
     .fhs-thead{text-align:center;padding-bottom:16px;margin-bottom:4px;border-bottom:1px solid var(--fhs-line)}
-    .fhs-ttitle{font-size:22px;font-weight:800;color:var(--fhs-title);line-height:1.4;letter-spacing:.01em}
+    .fhs-ttitle{font-size:22px;font-weight:700;color:var(--fhs-title);line-height:1.4;letter-spacing:.01em}
     .fhs-tsub{font-size:14px;color:var(--fhs-muted);margin-top:5px;line-height:1.6}
     /* 見出しの左に置くアイコン（会社ロゴ・ファビコンなど）。高さは見出しの文字に合わせる */
     /* 正方形なら高さ基準で収まり、横長ロゴでも読める程度の幅を許す（object-fitで縦横比は保つ） */
@@ -2277,7 +2279,7 @@ function eaf_shortcode($atts = array()) {
     /* ★9枚を一覧で見せきる。数を絞ると「自分のが無い」と判断されて離脱するので、
        選びやすさより網羅性を優先している。min() を挟まないと狭い端末で列が縮まない。 */
     .fhs-ptype-field{margin:0 0 6px}
-    .fhs-tile-q{display:flex;align-items:center;flex-wrap:wrap;font-weight:800;font-size:19px;color:var(--fhs-ink);margin:0 0 12px;line-height:1.5}
+    .fhs-tile-q{display:flex;align-items:center;flex-wrap:wrap;font-weight:700;font-size:19px;color:var(--fhs-ink);margin:0 0 12px;line-height:1.5}
     /* ★3列固定。auto-fit にすると広い画面で7列＋2列のような割れ方をして、
        タイルが横に伸びきり一覧として読みづらくなる。9枚なので3×3がきれいに収まる。 */
     .fhs-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
@@ -2308,7 +2310,9 @@ function eaf_shortcode($atts = array()) {
     .fhs-tile-business{--t-bg:#EFF1F6;--t-fg:#4C5878}
     .fhs-tile-other   {--t-bg:#F5F3EF;--t-fg:#6B6155}
     /* ティザーは記事の途中に置く小さな入口なので、タイルも一回り小さくする */
-    .fhs-design-teaser .fhs-tiles,.fhs-design-teaser-v .fhs-tiles{grid-template-columns:repeat(auto-fit,minmax(min(100%,104px),1fr));gap:7px}
+    /* ★列数は本体と同じ3列を継ぐ。ここで auto-fit に戻すと、記事の幅が広いページで
+       5枚＋4枚のように割れて、9枚が一覧に見えなくなる。 */
+    .fhs-design-teaser .fhs-tiles,.fhs-design-teaser-v .fhs-tiles{gap:7px}
     .fhs-design-teaser .fhs-tile,.fhs-design-teaser-v .fhs-tile{padding:9px 6px;font-size:12px;border-radius:14px;gap:3px}
     .fhs-wrap.fhs-design-teaser .fhs-tile-ico,.fhs-wrap.fhs-design-teaser-v .fhs-tile-ico{width:20px;height:20px}
     /* ===== 横長：入力欄を横一列に並べる =====
@@ -2329,7 +2333,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-ttags{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:9px}
     /* タグは四角・線なしの塗りだけ。バッジ（丸い塗り）と形を変えて、並んでもくどくならないようにする */
     .fhs-ttag{font-size:12px;font-weight:700;color:var(--fhs-brand);background:rgba(var(--fhs-brand-rgb),.10);border:0;border-radius:5px;padding:6px 11px;line-height:1.3;white-space:nowrap}
-    .fhs-tbadge{display:inline-block;background:var(--fhs-badge-bg);border:1px solid var(--fhs-badge-bg);color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:5px 14px;line-height:1}
+    .fhs-tbadge{display:inline-block;background:var(--fhs-badge-bg);border:1px solid var(--fhs-badge-bg);color:#fff;font-size:12px;font-weight:700;border-radius:999px;padding:5px 14px;line-height:1}
     .fhs-tnote{color:var(--fhs-muted);font-size:12px;margin-top:12px;line-height:1.8;text-align:center;text-wrap:pretty}
     .fhs-tnote span{display:block}
     .fhs-admin-warn{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;padding:12px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;line-height:1.8}
@@ -2351,7 +2355,7 @@ function eaf_shortcode($atts = array()) {
 
     /* 引き継ぎ後の「続きはこちらから」バナー */
     .fhs-resume{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-left:4px solid var(--fhs-brand);border-radius:8px;padding:12px 14px;margin:26px 0 6px;font-size:15px}
-    .fhs-resume b{color:var(--fhs-brand);font-weight:800}
+    .fhs-resume b{color:var(--fhs-brand);font-weight:700}
     .fhs-resume span{color:var(--fhs-muted);font-size:14px}
   </style>
 <?php endif; /* $need_assets */ ?>

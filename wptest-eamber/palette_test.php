@@ -56,9 +56,11 @@ t('無い名前もブランドに落ちる', eaf_opt('tile_palette', 'brand'), '
 
 /* --- 6. フォームのCSSに入っている（★最初の呼び出しでしか見られない） --- */
 set_pal('brand');
-$html = eaf_shortcode(array());
-t('スタイルに配色が入る', has($html, '.fhs-wrap .fhs-tile{--t-bg:#F1F3F7'), true);
-t('選択中の見た目が配色に従う', has($html, 'background:var(--t-sel-bg,var(--t-bg))'), true);
+fake_assets_reset();
+eaf_shortcode(array());
+$css = fake_inline_style();   /* CSSはキュー側に積まれる */
+t('スタイルに配色が入る', has($css, '.fhs-wrap .fhs-tile{--t-bg:#F1F3F7'), true);
+t('選択中の見た目が配色に従う', has($css, 'background:var(--t-sel-bg,var(--t-bg))'), true);
 
 /* --- 7. 設定画面に3つ並ぶ --- */
 $GLOBALS['FAKE_IS_ADMIN'] = true;

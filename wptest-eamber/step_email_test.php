@@ -21,7 +21,7 @@ function t($n, $g, $w) {
 /* ================= 1. 2ステップ構成 ================= */
 $html = eaf_shortcode(array());
 t('ステップは2つ',                substr_count($html, '<div class="fhs-formstep"'), 2);
-t('ステップ名は 概要→個人情報',    strpos($html, '["お困りの内容","ご連絡先"]') !== false, true);
+t('ステップ名は 概要→個人情報',    strpos(fake_inline_script(), '["お困りの内容","ご連絡先"]') !== false, true);
 t('「ご状況」という中間ステップが無い', strpos($html, 'ご状況') !== false, false);
 
 /* 工事内容別の必須（エアコンなら「ご希望の作業」）は1画面目=data-step="1"の中にある */

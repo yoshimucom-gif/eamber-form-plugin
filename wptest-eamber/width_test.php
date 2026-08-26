@@ -23,8 +23,7 @@ function maxw($atts = array()) {
     return preg_match('/class="fhs-wrap[^"]*"[^>]*style="max-width:([^"]+)"/', $h, $m) ? $m[1] : '';
 }
 
-/* ★CSSは1ページに1回しか出力されない（2回目以降のショートコードでは省かれる）。
-   スタイルを検査したいなら、必ず最初の1回を捕まえておくこと。 */
+/* CSSはキューに積まれるので、1回でも描画すれば取り出せる */
 $FIRST = eaf_shortcode(array());
 
 /* --- 1. 値の正規化 --- */
@@ -61,10 +60,11 @@ t('コンパクトにも効く',   maxw(array('design' => 'compact', 'width' => 
 t('ティザーにも効く',     maxw(array('design' => 'teaser', 'url' => '/contact/', 'width' => '820')), '820px');
 t('壊れた指定は既定に戻る', maxw(array('width' => '720px;background:red')), '900px');
 
-/* --- 5. 中央寄せとタイルの列数（最初の出力に入っているCSSで見る） --- */
-t('中央に寄せている', strpos($FIRST, 'margin:0 auto') !== false, true);
+/* --- 5. 中央寄せとタイルの列数（CSSはキューから取り出す） --- */
+$css = fake_inline_style();
+t('中央に寄せている', strpos($css, 'margin:0 auto') !== false, true);
 /* 幅を絞ってもタイルは3列のまま（1列に崩れると縦に伸びきる） */
-t('タイルは3列を保つ', strpos($FIRST, '.fhs-tiles{display:grid;grid-template-columns:repeat(3,1fr)') !== false, true);
+t('タイルは3列を保つ', strpos($css, '.fhs-tiles{display:grid;grid-template-columns:repeat(3,1fr)') !== false, true);
 
 /* --- 6. 自己診断 --- */
 t('自己診断: max-widthを取り出せている', maxw(array('width' => '555')), '555px');

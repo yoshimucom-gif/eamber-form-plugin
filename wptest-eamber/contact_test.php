@@ -63,6 +63,19 @@ t('cardでも出る',       has(eaf_shortcode(array('design' => 'card')), TELBAR
 t('compactでも出る',    has(eaf_shortcode(array('design' => 'compact')), TELBAR), true);
 t('ティザーには出ない', has(eaf_shortcode(array('design' => 'teaser', 'url' => '/contact/')), TELBAR), false);
 
+/* --- 4b. 帯の色を選べる --- */
+set_opts(array('operator_contact' => '090-3451-6042',
+               'color_tel_bg' => '#fff8e6', 'color_tel_bd' => '#e8c98a', 'color_tel_fg' => '#7a5310'));
+/* ★CSSは1リクエストに1回しか積まれない（ハンドルで重複を防ぐ本物と同じ挙動）。
+     設定を変えた効果を見るには、積み直しの状態に戻してから描画する。 */
+fake_assets_reset();
+eaf_shortcode(array());
+$css = fake_inline_style();
+t('背景色が入る', strpos($css, '--fhs-tel-bg:#fff8e6') !== false, true);
+t('線の色が入る', strpos($css, '--fhs-tel-bd:#e8c98a') !== false, true);
+t('文字色が入る', strpos($css, '--fhs-tel-fg:#7a5310') !== false, true);
+t('番号も文字色に従う', strpos($css, '.fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-tel-fg)') !== false, true);
+
 /* --- 5. 廃止した設定は保存しない --- */
 set_opts(array('operator_contact' => '090-3451-6042', 'show_contact' => '1'));
 $o = get_option(EAF_OPT, array());

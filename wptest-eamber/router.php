@@ -39,6 +39,15 @@ if ($uri === '/__reset') {
 $GLOBALS['FAKE_IS_ADMIN'] = in_array($uri, array('/settings', '/leads', '/save'), true);
 require_once dirname(__DIR__) . '/eamber-form/eamber-form.php';
 
+/* 本物のWordPressは wp_head / wp_footer でキューを吐く。
+   ここでは同じ役目の関数を用意して、描画のあとに一度だけ出す。 */
+function fake_print_assets() {
+    $css = fake_inline_style();
+    $js  = fake_inline_script();
+    if ($css !== '') echo '<style>' . $css . '</style>';
+    if ($js  !== '') echo '<script>' . $js . '</script>';
+}
+
 // 有効化フック（テーブル作成）。?noactivate=1 を付けると
 // 「既にインストール済みのサイトが自動更新で新版になった」状況（plugins_loaded だけが走る）を再現できる
 if (empty($_GET['noactivate'])) {
@@ -173,9 +182,11 @@ if ($uri === '/lp') {
         echo do_shortcode_call('eamber_form', array('design' => 'teaser', 'url' => '/', 'width' => '820'));
         echo '<p style="height:40px"></p>';
     }
+    fake_print_assets();
     echo '</body>';
     exit;
 }
 echo do_shortcode_call('eamber_form', $sc_atts);
 if ($twice) echo '<hr>' . do_shortcode_call('eamber_form', $sc_atts);
+fake_print_assets();
 echo '</body>';

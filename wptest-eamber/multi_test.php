@@ -28,8 +28,22 @@ preg_match_all('/ id="([^"]+)"/', $page, $m2);
 $allIds = $m2[1];
 t('ページ全体のidに重複がない', count(array_unique($allIds)), count($allIds));
 
-t('styleはページに1つ',  substr_count($page, '<style>'), 1);
-t('scriptはページに1つ', substr_count($page, '<script>'), 1);
+/* ★CSS/JSは本文に埋め込まず、WordPressのキューに載せる。
+     以前は「最初のショートコードだけが出す」作りで、抜粋やOGP生成で
+     先に1回走ると読者に見えるフォームが素のHTMLになっていた（記事で実際に崩れた）。 */
+t('本文にstyleを埋め込まない',  substr_count($page, '<style>'), 0);
+t('本文にscriptを埋め込まない', substr_count($page, '<script>'), 0);
+t('CSSはキューに1回だけ積まれる',
+  substr_count(fake_inline_style(), '.fhs-tiles{display:grid'), 1);
+t('JSもキューに1回だけ',
+  substr_count(fake_inline_script(), 'window.fhsFormsReady = true'), 1);
+t('ハンドルが積まれている', wp_style_is('eamber-form', 'enqueued') && wp_script_is('eamber-form', 'enqueued'), true);
+/* ★本命の退行検査：本文以外で先に1回描画されても、後の描画でCSSが欠けないこと */
+fake_assets_reset();
+$discarded = eaf_shortcode(array());          // 抜粋などで捨てられる描画
+$visible   = eaf_shortcode(array());          // 読者に見える描画
+t('先に捨てられる描画があってもCSSは残る',
+  strpos(fake_inline_style(), '.fhs-tiles{display:grid') !== false, true);
 t('formは数だけある',    substr_count($page, '<form class="fhs-form"'), 10);
 
 // 各ラッパが自分の設定をdata属性で持っている

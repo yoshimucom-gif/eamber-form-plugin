@@ -65,9 +65,13 @@ $field = eaf_color_field('color_badge', '#E8A33D');
 t('テキスト欄に現在値が入る', strpos($field, 'value="#00a86b"') !== false, true);
 t('初期値ボタンに既定色',     strpos($field, 'data-default="#E8A33D"') !== false, true);
 
-/* --- 4. CSSへの反映（★ここが最初の eaf_shortcode 呼び出し） --- */
-$css = eaf_shortcode(array());
-t('CSSが出力されている',           strpos($css, '<style>') !== false, true);
+/* --- 4. CSSへの反映 ---
+   ★CSSはショートコードの戻り値ではなく、WordPressのキューに積まれる。
+     （本文以外でも the_content が回るため、出力をWPに任せる作りにした） */
+eaf_shortcode(array());
+$css = fake_inline_style();
+/* キューに積むのでタグは含まない。CSS本体が入っていることを見る */
+t('CSSが積まれている',             strpos($css, '.fhs-wrap{--fhs-brand:') !== false, true);
 t('ブランドカラーが入る',           strpos($css, '--fhs-brand:#1f2e43') !== false, true);
 t('ボタン背景を別色にできる',       strpos($css, '--fhs-btn-bg:#ff8a00') !== false, true);
 t('バッジ色が入る',                 strpos($css, '--fhs-badge-bg:#00a86b') !== false, true);

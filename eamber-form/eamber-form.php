@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.3.0');
+define('EAF_VER', '1.4.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -607,6 +607,9 @@ function eaf_sanitize_options($in) {
         'color_btn_text'   => sanitize_hex_color($in['color_btn_text'] ?? '') ?: '#1E3050',
         'color_title'      => sanitize_hex_color($in['color_title'] ?? '')    ?: '#1E3050',
         'color_badge'      => sanitize_hex_color($in['color_badge'] ?? '')    ?: '#E8A33D',
+        'color_tel_bg'     => sanitize_hex_color($in['color_tel_bg'] ?? '')   ?: '#F1F3F7',
+        'color_tel_bd'     => sanitize_hex_color($in['color_tel_bd'] ?? '')   ?: '#DCE2EB',
+        'color_tel_fg'     => sanitize_hex_color($in['color_tel_fg'] ?? '')   ?: '#1E3050',
     );
     // 各項目のモード（必須／任意／非表示）。スキーマを回して必ず明示値を保存する
     foreach (eaf_all_groups() as $g => $flds) {
@@ -1453,6 +1456,16 @@ function eaf_settings_page() {
                     <p class="description">ティザーの「無料・秘密厳守」バッジの色です。</p>
                 </td></tr>
             </table>
+
+            <h3>電話案内の色</h3>
+            <p class="description">フォームの一番上に出る、電話番号の帯の色です。テーマとの相性が出やすいので個別に選べます。</p>
+            <table class="form-table">
+                <tr><th>背景色</th><td><?php echo eaf_color_field('color_tel_bg', '#F1F3F7'); ?></td></tr>
+                <tr><th>線の色</th><td><?php echo eaf_color_field('color_tel_bd', '#DCE2EB'); ?>
+                    <p class="description">背景と同じ色にすれば、線を消したように見せられます。</p></td></tr>
+                <tr><th>文字色</th><td><?php echo eaf_color_field('color_tel_fg', '#1E3050'); ?>
+                    <p class="description">メッセージ・電話番号・サブメッセージに使われます（サブは少し薄く表示）。</p></td></tr>
+            </table>
             <p class="description">初期値：ブランド <code>#1E3050</code> ／ ボタン <code>#E8A33D</code> ／ ボタン文字 <code>#1E3050</code> ／ 見出し <code>#1E3050</code> ／ バッジ <code>#E8A33D</code><br>
                 空欄のまま保存すると初期値に戻ります。</p>
             </div>
@@ -2020,231 +2033,36 @@ function eaf_ajax() {
     ));
 }
 
+
 /* =========================================================================
- * 11. ショートコード [eamber_form]
- * ======================================================================= */
-add_shortcode('eamber_form', 'eaf_shortcode');
-/**
- * デザインパターン:
- *   [eamber_form]                  標準（全項目・幅100%・枠なし）
- *   [eamber_form design="compact"] コンパクト（必須のみ・カード・幅440px）
- *   [eamber_form design="card"]    全項目をカード（枠＋影）で表示
- *   [eamber_form design="teaser"]   入口フォーム・横長（記事の途中に置く）
- *   [eamber_form design="teaser-v"] 入口フォーム・縦（サイドバー）
- *   ※遷移先は設定の「お問い合わせページ」。url 属性で個別に上書きもできる
+ * 10c. スタイルとスクリプト
  *
- * ティザーは2〜3項目だけ聞いて url のページへ送る。入力値は sessionStorage で引き継ぐ
- * （URLのクエリには載せない＝入力内容が履歴やリファラに残らないようにするため）。
- */
-function eaf_shortcode($atts = array()) {
-    $atts  = eaf_unglue_atts($atts);
-    $glued = !empty($atts['eaf_glued']);   // 属性の間のスペースが抜けていた（拾って動かしている）
-    unset($atts['eaf_glued']);
-    $a = shortcode_atts(array(
-        'design' => 'default', 'button' => '',
-        // ティザー用
-        'url' => '', 'title' => '', 'subtitle' => '', 'note' => '', 'fields' => '',
-        'logo' => '', 'badge' => '', 'steps' => '1', 'width' => '', 'tags' => '',
-    ), $atts, 'eamber_form');
-    $design  = in_array($a['design'], array('default', 'compact', 'card', 'teaser', 'teaser-v'), true) ? $a['design'] : 'default';
-    $compact = ($design === 'compact');
-    $teaser  = ($design === 'teaser' || $design === 'teaser-v');   // 入口フォーム（本フォームへ引き継ぐ）
-    $btn     = $a['button'] !== '' ? sanitize_text_field($a['button'])
-                                   : ($teaser ? '無料で相談する' : 'この内容で送信する');
+ * ★以前は最初のショートコードだけが <style>/<script> を吐く作りだった。
+ *   ところが the_content は本文以外でも回る（抜粋・OGP・関連記事など）。
+ *   そこで先に1回消費されると、読者に見えるフォームが素のHTMLで出てしまう。
+ *   実際に記事へ貼ったところ、これで崩れた。
+ *   WordPress のキュー（ハンドル単位で重複を防ぐ）に載せて出力を任せる。
+ * ======================================================================= */
 
-    /* ティザーの遷移先。url を書かなければ、設定で指定したお問い合わせページへ送る
-       （ショートコードにURLを毎回書かなくて済むように）。 */
-    $t_target = '';
-    if ($teaser) {
-        $t_target = $a['url'] !== '' ? esc_url_raw($a['url']) : eaf_form_url();
-    }
-    $t_title  = $a['title']    !== '' ? sanitize_text_field($a['title'])    : '60秒でかんたん入力';
-    $t_sub    = $a['subtitle'] !== '' ? sanitize_text_field($a['subtitle']) : '';
-    $t_note   = $a['note']     !== '' ? sanitize_text_field($a['note'])     : '';
-    /* 注記は行ごとに分けて出す（幅によって変な位置で折り返さないように）。
-       note属性では「|」で行を区切れる。 */
-    $t_note_lines = $t_note !== ''
-        ? array_values(array_filter(array_map('trim', explode('|', $t_note)), 'strlen'))
-        : array('入力内容は次のページに引き継がれます。', 'この時点ではまだ送信されません。');
-    // アイコンは設定のものを使い、ショートコードで指定があればそちらを優先する
-    $t_logo   = $a['logo']     !== '' ? esc_url_raw($a['logo'])             : eaf_opt('logo_url', '');
-    /* バッジとタグは「設定画面で決めて全ティザーに反映」が基本。
-       ショートコードで指定があればそのフォームだけ上書き。
-       どちらも空なら表示しない（既定の文言は持たせない）。 */
-    $t_badge  = isset($atts['badge']) ? sanitize_text_field($a['badge']) : eaf_opt('teaser_badge', '');
-    $t_tags   = eaf_split_tags(isset($atts['tags']) ? $a['tags'] : eaf_opt('teaser_tags', ''));
-    $t_steps  = ($a['steps'] !== '0' && $a['steps'] !== '');
-    $t_fields = $teaser ? eaf_parse_teaser_fields($a['fields']) : array();
+/** ステップの名前。JSとフォーム本体の両方から使う */
+function eaf_step_titles() {
+    return array('お困りの内容', 'ご連絡先');
+}
 
-    /**
-     * 横幅。数字だけなら px として扱う（width="680"）。width="100%" も指定できる。
-     *
-     * ★ティザーだけでなく本体フォームにも効かせる。テーマによっては本文が
-     *   1400px 以上あり、そのままだとタイルが1枚ずつ巨大になって
-     *   「一覧をひと目で見渡す」というタイルの利点が消える。
-     * 優先順位: ショートコードの width → 設定「フォームの横幅」→ デザインごとの既定。
-     */
-    $t_width = eaf_parse_width($a['width']);
-    if ($t_width === '') {
-        if ($design === 'teaser')          $t_width = '100%';   // 横一列に並べるので本文幅いっぱい
-        elseif ($design === 'teaser-v')    $t_width = '440px';
-        elseif ($design === 'compact')     $t_width = '440px';
-        else {
-            $t_width = eaf_parse_width(eaf_opt('form_width', ''));
-            if ($t_width === '') $t_width = '680px';
-        }
-    }
-
-    $c_brand    = eaf_opt('color_brand', '#1E3050');
-    $c_btn_text = eaf_opt('color_btn_text', '#1E3050');
-    /* 送信ボタンの色。未指定ならサイトの「お問合せ」ボタンと同じアンバー。
-       ★文字色は白ではなく紺にしてある。#E8A33D に白文字はコントラスト 2.4:1 しかなく
-         沈むが、紺(#1E3050)を載せると 6.1:1 で確実に読める。
-         サイトのボタンと完全にそろえたい場合は設定で #ffffff にできる。 */
-    $c_btn_bg   = eaf_opt('color_btn_bg', '') ?: '#E8A33D';
-    $c_title    = eaf_opt('color_title', '#1E3050');
-    $c_badge    = eaf_opt('color_badge', '#E8A33D');
+/** フォームのCSS。色と配色は設定だけで決まるので、ショートコードが無くても組める */
+function eaf_form_css() {
+    $c_brand     = eaf_opt('color_brand', '#1E3050');
+    $c_btn_text  = eaf_opt('color_btn_text', '#1E3050');
+    $c_btn_bg    = eaf_opt('color_btn_bg', '') ?: '#E8A33D';
+    $c_title     = eaf_opt('color_title', '#1E3050');
+    $c_badge     = eaf_opt('color_badge', '#E8A33D');
     $c_brand_rgb = eaf_hex_to_rgb($c_brand);
-
-    $nonce   = wp_create_nonce('eamber_form');
-    $ajax    = admin_url('admin-ajax.php');
-    $privacy = eaf_opt('privacy_url');
-    /* 1ページに複数置かれる前提。uniqid() は同一リクエスト内で同じ値を返すことがあるため、
-       連番を足して確実に一意にする（idが重なると label が別のフォームの入力欄を指してしまう）。
-       CSSとJSは何個あっても最初の1回だけ出す。 */
-    static $seq = 0, $assets_done = false;
-    $uid     = 'fhs-' . uniqid() . '-' . (++$seq);
-    $need_assets = !$assets_done;
-    $assets_done = true;
-
-    // compact では必須項目だけに絞る（メインビジュアル横などに収めるため）
-    $cust_fields = eaf_visible_fields('customer',  eaf_customer_fields(),  $compact);
-    $situ_fields = eaf_visible_fields('situation', eaf_situation_fields(), $compact);
-    $show_mkt    = eaf_flag('show_marketing', false) && !$compact;
-
-    /* ステップは2つだけ:「お困りの内容（概要）→ ご連絡先（個人情報）」。
-       画面を増やすほど離脱するため、聞くことは1画面目にまとめ、個人情報は必ず最後に置く。
-       compact とティザーは元々短いので分けない。 */
-    $stepped     = !$teaser && !$compact && eaf_flag('step_form', true);
-    $step_titles = array('お困りの内容', 'ご連絡先');
-
-    /* 第三者提供の設定は持たない（運営＝施工＝同じ会社の自社サイトに置くフォームのため）。
-       同意文・利用目的は「自社が対応・連絡に使う」の一本に固定する。 */
-    $op_name = eaf_opt('site_name', '当社');
-    /* 急ぎのお客様には電話が最短なので、電話番号はフォームの一番上に出す
-       （本気査定は「電話で済まされると申込が減る」ため伏せていたが、
-        自社サイトの工事問い合わせでは電話も同じ受注。隠す理由がない）。 */
-    $op_tel = eaf_opt('operator_contact', '');
-    $tel_msg = eaf_opt('tel_message', 'お急ぎの方はお電話ください。');
-    $tel_sub = eaf_opt('tel_submessage', '');
-
-    /* ★同意はプライバシーポリシーの1本だけ。
-       免責事項はフォーク元（価格を示す査定フォーム）で要ったもので、
-       このフォームは価格を一切示さない。存在しない文書への同意は求めない。 */
-    $agree_label = ($privacy
-        ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>'
-        : 'プライバシーポリシー') . 'に同意します（必須）';
-
-    /**
-     * 工事内容のタイル選択。
-     *
-     * ★セレクトは「開く→探す→選ぶ」の3動作だが、タイルは押すだけの1動作で済む。
-     *   さらに選択肢が最初から一覧で見えるので、「電気工事を頼みたい」までしか
-     *   決まっていない読者が、自分の用件をこの一覧から言い当てられる。
-     *   この層が流入の最大勢力なので、一覧の網羅性が反響数に直結する。
-     */
-    $render_ptype_tiles = function ($uid, $name = 'ptype', $with_note = false, $labelledby = '') {
-        ob_start(); ?>
-        <div class="fhs-tiles" role="group"<?php echo $labelledby ? ' aria-labelledby="' . esc_attr($labelledby) . '"' : ''; ?>>
-<?php foreach ($GLOBALS['EAF_PTYPE_LABEL'] as $k => $v):
-        $short = isset($GLOBALS['EAF_PTYPE_SHORT'][$k]) ? $GLOBALS['EAF_PTYPE_SHORT'][$k] : $v;
-        $note  = isset($GLOBALS['EAF_PTYPE_NOTE'][$k])  ? $GLOBALS['EAF_PTYPE_NOTE'][$k]  : '';
-        $tid = $uid . '-tile-' . $k; ?>
-          <input type="radio" name="<?php echo esc_attr($name); ?>" id="<?php echo esc_attr($tid); ?>" value="<?php echo esc_attr($k); ?>" class="fhs-tile-input">
-          <label class="fhs-tile fhs-tile-<?php echo esc_attr($k); ?>" for="<?php echo esc_attr($tid); ?>">
-            <?php echo eaf_ptype_icon($k); ?>
-            <span class="fhs-tile-t"><?php echo esc_html($short); ?></span>
-<?php if ($with_note && $note !== ''): ?>
-            <span class="fhs-tile-n"><?php echo esc_html($note); ?></span>
-<?php endif; ?>
-          </label>
-<?php endforeach; ?>
-        </div>
-<?php return ob_get_clean();
-    };
-
-    /** ティザー1項目ぶんのHTML（STEP表記つき） */
-    $render_teaser_field = function ($key, $fd, $i, $uid) use ($render_ptype_tiles, $t_steps) {
-        $nm = eaf_teaser_form_name($key);
-        $id = $uid . '-t-' . $key;
-        ob_start(); ?>
-        <div class="fhs-tfield fhs-tfield-<?php echo esc_attr($key); ?>">
-          <label<?php echo $fd['type'] === 'ptype' ? '' : ' for="' . esc_attr($id) . '"'; ?>>
-<?php if ($t_steps): ?><span class="fhs-step">STEP <?php echo (int)$i; ?></span><?php endif; ?>
-            <?php echo esc_html($fd['label']); ?>
-          </label>
-<?php if ($fd['type'] === 'ptype'): ?>
-          <?php echo $render_ptype_tiles($uid, 'ptype'); ?>
-<?php elseif ($fd['type'] === 'select'): ?>
-          <select name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed">
-            <option value="">選択してください</option>
-<?php foreach (eaf_opt_list($fd['opts']) as $o): ?>
-            <option value="<?php echo esc_attr($o); ?>"><?php echo esc_html($o); ?></option>
-<?php endforeach; ?>
-          </select>
-<?php else: ?>
-          <input type="text" name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" placeholder="<?php echo esc_attr(isset($fd['ph']) ? $fd['ph'] : ''); ?>">
-<?php endif; ?>
-        </div>
-<?php return ob_get_clean();
-    };
-
-    /** 1項目ぶんのHTML（ラベル＋入力欄）。$prefix はPOSTキーの接頭辞 */
-    $render_field = function ($fd, $prefix, $uid) {
-        $nm   = $prefix . $fd['key'];
-        $req  = ($fd['mode'] === 'req');
-        $full = ($fd['type'] === 'textarea');
-        $id   = $uid . '-' . $nm;
-        ob_start(); ?>
-        <div class="fhs-field<?php echo $full ? ' fhs-full' : ''; ?>">
-<?php if ($fd['type'] === 'check'): ?>
-          <div class="fhs-check">
-            <input type="checkbox" name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" value="1">
-            <label for="<?php echo esc_attr($id); ?>"><?php echo esc_html($fd['chk']); ?></label>
-          </div>
-<?php else: ?>
-          <label for="<?php echo esc_attr($id); ?>"><?php echo esc_html($fd['label']); ?><?php echo $req ? '<span class="fhs-req">必須</span>' : '<span class="fhs-opt">任意</span>'; ?></label>
-<?php if ($fd['type'] === 'select'): ?>
-          <select name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" data-req="<?php echo $req ? '1' : ''; ?>">
-            <option value="">選択してください</option>
-<?php foreach (eaf_opt_list($fd['opts']) as $o): ?>
-            <option value="<?php echo esc_attr($o); ?>"><?php echo esc_html($o); ?></option>
-<?php endforeach; ?>
-          </select>
-<?php elseif ($fd['type'] === 'textarea'): ?>
-          <textarea name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" data-req="<?php echo $req ? '1' : ''; ?>" rows="2" placeholder="<?php echo esc_attr(isset($fd['ph']) ? $fd['ph'] : ''); ?>"></textarea>
-<?php else:
-        /* 数値は type="number" にしない。全角数字を打つとブラウザが値を空にしてしまい、
-           「入力したのに必須エラーが出る」状態になるため。inputmode でキーパッドだけ出す。 */
-        $type = 'text'; $extra = '';
-        if ($fd['type'] === 'number') { $extra = ' inputmode="decimal"'; }
-        elseif ($fd['type'] === 'tel') { $type = 'tel'; $extra = ' inputmode="tel" autocomplete="tel"'; }
-        elseif ($fd['key'] === 'name') { $extra = ' autocomplete="name"'; }
-?>
-          <input type="<?php echo $type; ?>"<?php echo $extra; ?> name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" data-req="<?php echo $req ? '1' : ''; ?>" placeholder="<?php echo esc_attr(isset($fd['ph']) ? $fd['ph'] : ''); ?>">
-<?php endif; ?>
-<?php endif; ?>
-        </div>
-<?php return ob_get_clean();
-    };
-
+    /* 電話案内は本文の直前に出る帯なので、テーマとの相性が出やすい。個別に選べるようにした */
+    $c_tel_bg    = eaf_opt('color_tel_bg', '#F1F3F7');
+    $c_tel_bd    = eaf_opt('color_tel_bd', '#DCE2EB');
+    $c_tel_fg    = eaf_opt('color_tel_fg', '#1E3050');
     ob_start(); ?>
-<div class="fhs-wrap fhs-design-<?php echo esc_attr($design); ?>" id="<?php echo esc_attr($uid); ?>"
-  data-fhs-teaser="<?php echo $teaser ? '1' : ''; ?>" data-fhs-target="<?php echo esc_attr($t_target); ?>"<?php
-  echo $t_width ? ' style="max-width:' . esc_attr($t_width) . '"' : ''; ?>>
-<?php if ($need_assets): ?>
-  <style>
-    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75;font-size:17px}
+    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-tel-bg:<?php echo esc_attr($c_tel_bg); ?>;--fhs-tel-bd:<?php echo esc_attr($c_tel_bd); ?>;--fhs-tel-fg:<?php echo esc_attr($c_tel_fg); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75;font-size:17px}
     /* テーマ側が box-sizing を当てているかどうかで、余白ぶん高さ・幅がずれる。
        このフォームの中だけは border-box に固定して、どのテーマでも同じ見た目にする。 */
     .fhs-wrap,.fhs-wrap *{box-sizing:border-box}
@@ -2260,18 +2078,18 @@ function eaf_shortcode($atts = array()) {
     .fhs-req.fhs-done{background:var(--fhs-brand);color:#fff;border-radius:50%;width:20px;height:20px;padding:0;font-size:12px;justify-content:center}
     .fhs-lead{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:10px;padding:14px 16px;font-size:16px;color:#374151;margin-bottom:20px;white-space:pre-line}
     /* フォーム冒頭の電話案内。急ぎの読者が最初に目にする位置に置く */
-    .fhs-telbar{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:10px;padding:14px 16px;color:var(--fhs-ink);margin-bottom:18px;text-align:center}
+    .fhs-telbar{display:flex;flex-direction:column;align-items:center;gap:3px;background:var(--fhs-tel-bg);border:1px solid var(--fhs-tel-bd);border-radius:8px;padding:14px 16px;color:var(--fhs-tel-fg);margin-bottom:18px;text-align:center}
     .fhs-telbar-msg{font-size:15px;font-weight:700;line-height:1.6}
-    .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-brand);font-size:27px;font-weight:700;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
+    .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-tel-fg);font-size:27px;font-weight:700;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
     .fhs-wrap .fhs-telbar-num svg{width:22px;height:22px;flex:0 0 auto}
-    .fhs-telbar-sub{font-size:12.5px;font-weight:500;color:var(--fhs-muted);line-height:1.6}
+    .fhs-telbar-sub{font-size:12.5px;font-weight:500;color:var(--fhs-tel-fg);opacity:.72;line-height:1.6}
     @media(max-width:400px){.fhs-wrap .fhs-telbar-num{font-size:23px}}
     .fhs-section{display:flex;align-items:center;gap:9px;font-weight:700;font-size:20px;color:var(--fhs-ink);margin:34px 0 12px;line-height:1.45;letter-spacing:.01em}
     .fhs-section::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--fhs-brand);flex:0 0 auto}
     .fhs-form > .fhs-section:first-child{margin-top:0}
     /* ★チェックボックス・ラジオは対象外にする。padding や角丸が乗ると、
        テーマが自前で描いている環境で丸く潰れるなど表示が壊れる。 */
-    .fhs-wrap input:not([type=checkbox]):not([type=radio]),.fhs-wrap select,.fhs-wrap textarea{width:100%;padding:14px 15px;border:1.5px solid #E2DCD2;border-radius:8px;font-size:18px;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
+    .fhs-wrap input:not([type=checkbox]):not([type=radio]),.fhs-wrap select,.fhs-wrap textarea{width:100%;padding:14px 15px;border:1.5px solid #E2DCD2;border-radius:5px;font-size:18px;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
     .fhs-wrap input:not([type=checkbox]):not([type=radio]):focus,.fhs-wrap select:focus,.fhs-wrap textarea:focus{outline:none;border-color:var(--fhs-brand);box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.15)}
     /* テーマ側の appearance:none などを打ち消して、ブラウザ標準の四角いチェックに戻す */
     .fhs-wrap input[type=checkbox]{-webkit-appearance:checkbox;appearance:auto;width:auto;min-width:0;height:auto;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none}
@@ -2318,7 +2136,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-next-note{background:#eef6ff;border:1px solid #cfe3ff;border-radius:10px;padding:14px 16px;font-size:15px;color:#1c3d5a;margin-top:16px;line-height:1.8}
 
     /* デザイン: compact（横幅はPHP側でインラインに出すので、ここでは指定しない） */
-    .fhs-design-compact .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:10px;padding:20px 18px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
+    .fhs-design-compact .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:8px;padding:20px 18px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
     .fhs-design-compact label{font-size:16px;margin:12px 0 5px}
     .fhs-design-compact input,.fhs-design-compact select,.fhs-design-compact textarea{padding:11px 12px;font-size:16px}
     .fhs-design-compact button{margin-top:16px;padding:14px;font-size:17px}
@@ -2341,11 +2159,11 @@ function eaf_shortcode($atts = array()) {
     }
 
     /* デザイン: card */
-    .fhs-design-card .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:10px;padding:24px 22px;box-shadow:0 4px 18px rgba(16,24,40,.06)}
+    .fhs-design-card .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:8px;padding:24px 22px;box-shadow:0 4px 18px rgba(16,24,40,.06)}
 <?php // ここから下はティザー用。以降のスタイルも含めて、このブロックはページに1回だけ出力される ?>
 
     /* ============ ティザー（記事内などに置く入口フォーム） ============ */
-    .fhs-design-teaser .fhs-card,.fhs-design-teaser-v .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:10px;padding:22px 22px 24px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
+    .fhs-design-teaser .fhs-card,.fhs-design-teaser-v .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:8px;padding:22px 22px 24px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
     /* 記事の中に置くので中央寄せ。★幅(max-width)はラッパのインラインstyleで個別に指定する。
        ここに書くと、同じページに横長と縦を両方置いたとき、後から出力されたCSSが
        両方に効いてしまい、片方の幅が意図せず変わる。 */
@@ -2390,7 +2208,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-wrap .fhs-tile{
       display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;
       background:var(--t-bg,#F4F2EE);color:var(--t-fg,#5A5347);
-      border:2px solid transparent;border-radius:10px;padding:14px 8px 12px;margin:0;cursor:pointer;
+      border:2px solid transparent;border-radius:8px;padding:14px 8px 12px;margin:0;cursor:pointer;
       font-weight:700;font-size:13.5px;line-height:1.35;
       box-shadow:inset 0 -3px 0 rgba(0,0,0,.07);
       transition:transform .12s,box-shadow .15s,border-color .15s
@@ -2455,195 +2273,21 @@ function eaf_shortcode($atts = array()) {
     .fhs-resume{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-left:4px solid var(--fhs-brand);border-radius:8px;padding:12px 14px;margin:26px 0 6px;font-size:15px}
     .fhs-resume b{color:var(--fhs-brand);font-weight:700}
     .fhs-resume span{color:var(--fhs-muted);font-size:14px}
-  </style>
-<?php endif; /* $need_assets */ ?>
+<?php
+    return ob_get_clean();
+}
 
-  <div class="fhs-card fhs-form-card">
-<?php if ($glued && current_user_can('manage_options')): ?>
-    <div class="fhs-admin-warn fhs-admin-note"><strong>【この行は管理者にだけ見えています】ショートコードの属性の間に半角スペースが足りません。</strong><br>
-      いまは自動で読み取って表示していますが、<code>"</code> と次の属性の間に<strong>半角スペース</strong>を入れてください。<br>
-      × <code>url="/○○○/form/"width="640"</code>　→　○ <code>url="/○○○/form/" width="640"</code></div>
-<?php endif; ?>
-<?php if ($teaser): /* ===== 入口フォーム（ティザー）===== */ ?>
-<?php if (!$t_target && current_user_can('manage_options')): ?>
-    <div class="fhs-admin-warn"><strong>【この行は管理者にだけ見えています】</strong><br>
-      ティザーの遷移先が決まっていません。次のどちらかで設定してください。<br>
-      ① <a href="<?php echo esc_url(admin_url('admin.php?page=eamber-form')); ?>">設定 → 基本設定 → お問い合わせページ</a> で、<code>[eamber_form]</code> を貼ったページを選ぶ（<strong>おすすめ</strong>。以後どのティザーにも効きます）<br>
-      ② このショートコードに <code>url="https://…/○○○/form/"</code> を追加する</div>
-<?php endif; ?>
-    <div class="fhs-errors"></div>
-    <form class="fhs-form">
-      <div class="fhs-thead">
-        <div class="fhs-ttexts">
-<?php /* タグを先に置く。縦ではこの順（タグ→バッジ→見出し）がそのまま見た目の順になり、
-         読み上げの順序とも一致する。横長は1行に並べるので、CSSのorderで位置だけ入れ替える。 */ ?>
-<?php if ($t_tags): ?>
-          <div class="fhs-ttags">
-<?php foreach ($t_tags as $tag): ?>
-            <span class="fhs-ttag"><?php echo esc_html($tag); ?></span>
-<?php endforeach; ?>
-          </div>
-<?php endif; ?>
-<?php if ($t_badge !== ''): ?>
-          <div class="fhs-tbadge-row"><span class="fhs-tbadge"><?php echo esc_html($t_badge); ?></span></div>
-<?php endif; ?>
-          <div class="fhs-ttitle"><?php if ($t_logo): ?><img class="fhs-ticon" src="<?php echo esc_url($t_logo); ?>" alt="<?php echo esc_attr(eaf_opt('site_name', '')); ?>"><?php endif; ?><?php echo esc_html($t_title); ?></div>
-<?php if ($t_sub !== ''): ?>
-          <div class="fhs-tsub"><?php echo esc_html($t_sub); ?></div>
-<?php endif; ?>
-        </div>
-      </div>
-      <div class="fhs-trow">
-<?php $t_reg = eaf_teaser_fields(); $ti = 1;
-      foreach ($t_fields as $tk) { echo $render_teaser_field($tk, $t_reg[$tk], $ti++, $uid); } ?>
-        <div class="fhs-tcta">
-          <button class="fhs-submit" type="submit"><?php echo esc_html($btn); ?></button>
-        </div>
-      </div>
-      <?php /* 注記は文ごとに行を分ける。1つの段落にすると幅によって
-               「…送信されませ／ん。」のように中途半端な位置で折り返してしまう。
-               note属性では | で行を区切れる。 */ ?>
-      <div class="fhs-tnote">
-<?php foreach ($t_note_lines as $ln): ?>
-        <span><?php echo esc_html($ln); ?></span>
-<?php endforeach; ?>
-      </div>
-          </form>
-<?php else: /* ===== 通常のフォーム ===== */ ?>
-<?php if ($op_tel !== ''): ?>
-    <div class="fhs-telbar">
-      <span class="fhs-telbar-msg"><?php echo esc_html($tel_msg); ?></span>
-      <a class="fhs-telbar-num" href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h3l1.5 4-2 1.4a11 11 0 0 0 5.1 5.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z"/></svg><?php echo esc_html($op_tel); ?></a>
-<?php if ($tel_sub !== ''): ?>
-      <span class="fhs-telbar-sub"><?php echo esc_html($tel_sub); ?></span>
-<?php endif; ?>
-    </div>
-<?php endif; ?>
-<?php $lead = eaf_opt('lead_text'); if ($lead !== ''): ?>
-    <div class="fhs-lead"><?php echo esc_html($lead); ?></div>
-<?php endif; ?>
-    <div class="fhs-errors"></div>
-    <form class="fhs-form">
-      <?php /* ボット対策。人には見えず、自動入力ツールだけが埋める欄 */ ?>
-      <div class="fhs-hp" aria-hidden="true">
-        <label for="<?php echo esc_attr($uid . '-website'); ?>">ウェブサイト（入力しないでください）</label>
-        <input type="text" name="eaf_website" id="<?php echo esc_attr($uid . '-website'); ?>" tabindex="-1" autocomplete="off">
-      </div>
-
-<?php if ($stepped): /* 進み具合。ゴールが見えると最後まで書いてもらいやすい */ ?>
-      <div class="fhs-steps">
-        <div class="fhs-stepbar">
-<?php for ($i = 1; $i <= count($step_titles); $i++): ?>
-          <span class="fhs-stepdot" data-step="<?php echo $i; ?>"></span>
-<?php endfor; ?>
-        </div>
-        <div class="fhs-stepnow"></div>
-      </div>
-<?php endif; ?>
-
-<?php if ($stepped): ?><div class="fhs-formstep" data-step="1"><?php endif; ?>
-      <?php /* 見出しは置かない。問いかけそのものが見出しとして働くので、
-               「お困りの内容」と重ねると同じことを2回言うことになる。 */ ?>
-      <div class="fhs-ptype-field">
-        <span class="fhs-tile-q" id="<?php echo esc_attr($uid . '-ptq'); ?>">どんなことでお困りですか？<span class="fhs-req">必須</span></span>
-        <?php echo $render_ptype_tiles($uid, 'ptype', true, $uid . '-ptq'); ?>
-      </div>
-
-      <?php /* ★工事内容ごとの質問はタイルのすぐ下に置く。
-               押したタイルへの返事なので、市町村を挟むと話が飛んで見える。 */ ?>
-<?php foreach (eaf_property_fields() as $pt => $flds):
-        $vis = eaf_visible_fields('prop_' . $pt, $flds, $compact);
-        if (!$vis) continue; ?>
-      <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
-<?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
-      </div>
-<?php endforeach; ?>
-
-      <label for="<?php echo esc_attr($uid . '-address'); ?>">お住まい・現場の市町村<span class="fhs-req">必須</span></label>
-      <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" required>
-        <option value="">選択してください</option>
-<?php foreach (eaf_opt_list('city') as $ct): ?>
-        <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
-<?php endforeach; ?>
-      </select>
-<?php $city_hint = eaf_opt('city_hint', ''); if ($city_hint !== ''): ?>
-      <div class="fhs-hint"><?php echo esc_html($city_hint); ?></div>
-<?php endif; ?>
-<?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>
-<?php if ($situ_fields): ?>
-      <div class="fhs-group">
-<?php   foreach ($situ_fields as $fd) { echo $render_field($fd, 'situation_', $uid); } ?>
-      </div>
-<?php endif; ?>
-
-<?php if ($stepped): ?></div><?php endif; /* step 1 ここまで */ ?>
-
-<?php if ($stepped): ?><div class="fhs-formstep" data-step="2" style="display:none"><?php endif; ?>
-      <div class="fhs-section">ご連絡先</div>
-<?php if ($cust_fields): ?>
-      <div class="fhs-group">
-<?php   foreach ($cust_fields as $fd) { echo $render_field($fd, 'customer_', $uid); } ?>
-      </div>
-<?php endif; ?>
-      <label for="<?php echo esc_attr($uid . '-email'); ?>">メールアドレス<span class="fhs-opt">任意</span></label>
-      <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email">
-      <div class="fhs-hint">ご入力いただくと、受付内容の控えをメールでお送りします</div>
-
-      <?php /* 個人情報の利用目的の明示（個情法21条）。同意を求める直前に必ず出す。
-               プライバシーポリシーURLが未設定でも、最低限ここで目的が伝わるようにしておく。 */ ?>
-      <div class="fhs-privacy-note">
-        <strong>個人情報の取り扱いについて</strong><br>
-        ご入力いただいた内容は、<?php echo esc_html($op_name); ?>が<strong>お問い合わせへの対応とご連絡、およびそれに関するご案内</strong>のために利用します。<br>
-        ご本人の同意なく第三者に提供することはありません。<br>
-        削除をご希望の場合は、<?php echo $privacy
-            ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>に記載の窓口'
-            : '当社の窓口'; ?>までお申し付けください。
-      </div>
-
-      <div class="fhs-check">
-        <input type="checkbox" name="agree" id="<?php echo esc_attr($uid . '-agree'); ?>" value="1" required>
-        <label for="<?php echo esc_attr($uid . '-agree'); ?>"><?php echo $agree_label; ?></label>
-      </div>
-<?php if ($show_mkt): ?>
-      <div class="fhs-check">
-        <input type="checkbox" name="marketing" id="<?php echo esc_attr($uid . '-mkt'); ?>" value="1">
-        <label for="<?php echo esc_attr($uid . '-mkt'); ?>">工事・メンテナンスに関するご案内やお役立ち情報のメール受け取りを希望します（任意）</label>
-      </div>
-<?php endif; ?>
-<?php if ($compact): ?>
-      <input type="hidden" name="compact" value="1">
-<?php endif; ?>
-<?php if ($stepped): ?></div><?php endif; /* 最終ステップ ここまで */ ?>
-
-      <div class="fhs-nav">
-<?php if ($stepped): ?>
-        <button type="button" class="fhs-back" style="display:none">← 戻る</button>
-        <button type="button" class="fhs-nextstep">次へ進む</button>
-<?php endif; ?>
-        <button class="fhs-submit" type="submit"<?php echo $stepped ? ' style="display:none"' : ''; ?>><?php echo esc_html($btn); ?></button>
-      </div>
-    </form>
-<?php endif; /* ===== 分岐ここまで ===== */ ?>
-
-<?php /* 会社紹介の欄はあえて置かない。このフォームは自社サイトに置く前提で、
-         「どこの会社か」はサイト自体が示している（本気査定のような
-         運営と査定会社が別のケースではないため）。 */ ?>
-  </div>
-
-  <div class="fhs-card fhs-result" style="display:none"></div>
-</div>
-
-<?php if ($need_assets): ?>
-<script>
+/** フォームのJS */
+function eaf_form_js() {
+    ob_start(); ?>
 (function(){
   /* このスクリプトはページに1回だけ出力し、ページ内のフォームを全部まとめて初期化する。
      LPのようにティザーを何個も置いても、重いJSが人数分ぶら下がらないようにするため。 */
   if (window.fhsFormsReady) return;
   window.fhsFormsReady = true;
 
-  var AJAX = <?php echo wp_json_encode($ajax); ?>;
-  var NONCE = <?php echo wp_json_encode($nonce); ?>;
+  var AJAX = <?php echo wp_json_encode(admin_url('admin-ajax.php')); ?>;
+  var NONCE = <?php echo wp_json_encode(wp_create_nonce('eamber_form')); ?>;
   var LOADED_AT = Date.now();   // ページキャッシュがあってもJS側で計測すれば正しく効く
   var HANDOFF_KEY = 'eaf_handoff';
 
@@ -2799,7 +2443,7 @@ function eaf_shortcode($atts = array()) {
   var stepLabel = wrap.querySelector('.fhs-stepnow');
   var backBtn = wrap.querySelector('.fhs-back');
   var nextBtn = wrap.querySelector('.fhs-nextstep');
-  var STEP_TITLES = <?php echo wp_json_encode($stepped ? $step_titles : array()); ?>;
+  var STEP_TITLES = <?php echo wp_json_encode(eaf_step_titles()); ?>;
 
   /** そのステップの中で、まだ埋まっていない必須項目を返す */
   function missingIn(i){
@@ -3041,8 +2685,428 @@ function eaf_shortcode($atts = array()) {
   // 戻る操作からの復帰や、後から差し込まれたフォームにも効かせる
   window.addEventListener('pageshow', initAll);
 })();
-</script>
-<?php endif; /* $need_assets */ ?>
+<?php
+    return ob_get_clean();
+}
+
+add_action('wp_enqueue_scripts', 'eaf_register_assets');
+function eaf_register_assets() {
+    /* 中身の無いハンドルを土台にして、インラインで流し込む。
+       こうすると何回ショートコードが走っても出力は1回だけになる。 */
+    wp_register_style('eamber-form', false, array(), EAF_VER);
+    wp_register_script('eamber-form', false, array(), EAF_VER, true);
+    /* 本文にショートコードがあるなら head の段階で積む（後出しだと一瞬素の形で出る） */
+    if (!is_singular()) return;
+    $post = get_post();
+    if (!$post || !has_shortcode((string) $post->post_content, 'eamber_form')) return;
+    eaf_enqueue_assets();
+}
+
+/** ショートコード側からも呼ぶ。ウィジェットやブロックで置かれた場合の保険 */
+function eaf_enqueue_assets() {
+    if (!function_exists('wp_add_inline_style')) return;
+    if (!wp_style_is('eamber-form', 'registered')) {
+        wp_register_style('eamber-form', false, array(), EAF_VER);
+        wp_register_script('eamber-form', false, array(), EAF_VER, true);
+    }
+    if (!wp_style_is('eamber-form', 'enqueued')) {
+        wp_enqueue_style('eamber-form');
+        wp_add_inline_style('eamber-form', eaf_form_css());
+    }
+    if (!wp_script_is('eamber-form', 'enqueued')) {
+        wp_enqueue_script('eamber-form');
+        wp_add_inline_script('eamber-form', eaf_form_js());
+    }
+}
+
+/* =========================================================================
+ * 11. ショートコード [eamber_form]
+ * ======================================================================= */
+add_shortcode('eamber_form', 'eaf_shortcode');
+/**
+ * デザインパターン:
+ *   [eamber_form]                  標準（全項目・幅100%・枠なし）
+ *   [eamber_form design="compact"] コンパクト（必須のみ・カード・幅440px）
+ *   [eamber_form design="card"]    全項目をカード（枠＋影）で表示
+ *   [eamber_form design="teaser"]   入口フォーム・横長（記事の途中に置く）
+ *   [eamber_form design="teaser-v"] 入口フォーム・縦（サイドバー）
+ *   ※遷移先は設定の「お問い合わせページ」。url 属性で個別に上書きもできる
+ *
+ * ティザーは2〜3項目だけ聞いて url のページへ送る。入力値は sessionStorage で引き継ぐ
+ * （URLのクエリには載せない＝入力内容が履歴やリファラに残らないようにするため）。
+ */
+function eaf_shortcode($atts = array()) {
+    $atts  = eaf_unglue_atts($atts);
+    $glued = !empty($atts['eaf_glued']);   // 属性の間のスペースが抜けていた（拾って動かしている）
+    unset($atts['eaf_glued']);
+    $a = shortcode_atts(array(
+        'design' => 'default', 'button' => '',
+        // ティザー用
+        'url' => '', 'title' => '', 'subtitle' => '', 'note' => '', 'fields' => '',
+        'logo' => '', 'badge' => '', 'steps' => '1', 'width' => '', 'tags' => '',
+    ), $atts, 'eamber_form');
+    $design  = in_array($a['design'], array('default', 'compact', 'card', 'teaser', 'teaser-v'), true) ? $a['design'] : 'default';
+    $compact = ($design === 'compact');
+    $teaser  = ($design === 'teaser' || $design === 'teaser-v');   // 入口フォーム（本フォームへ引き継ぐ）
+    $btn     = $a['button'] !== '' ? sanitize_text_field($a['button'])
+                                   : ($teaser ? '無料で相談する' : 'この内容で送信する');
+
+    /* ティザーの遷移先。url を書かなければ、設定で指定したお問い合わせページへ送る
+       （ショートコードにURLを毎回書かなくて済むように）。 */
+    $t_target = '';
+    if ($teaser) {
+        $t_target = $a['url'] !== '' ? esc_url_raw($a['url']) : eaf_form_url();
+    }
+    $t_title  = $a['title']    !== '' ? sanitize_text_field($a['title'])    : '60秒でかんたん入力';
+    $t_sub    = $a['subtitle'] !== '' ? sanitize_text_field($a['subtitle']) : '';
+    $t_note   = $a['note']     !== '' ? sanitize_text_field($a['note'])     : '';
+    /* 注記は行ごとに分けて出す（幅によって変な位置で折り返さないように）。
+       note属性では「|」で行を区切れる。 */
+    $t_note_lines = $t_note !== ''
+        ? array_values(array_filter(array_map('trim', explode('|', $t_note)), 'strlen'))
+        : array('入力内容は次のページに引き継がれます。', 'この時点ではまだ送信されません。');
+    // アイコンは設定のものを使い、ショートコードで指定があればそちらを優先する
+    $t_logo   = $a['logo']     !== '' ? esc_url_raw($a['logo'])             : eaf_opt('logo_url', '');
+    /* バッジとタグは「設定画面で決めて全ティザーに反映」が基本。
+       ショートコードで指定があればそのフォームだけ上書き。
+       どちらも空なら表示しない（既定の文言は持たせない）。 */
+    $t_badge  = isset($atts['badge']) ? sanitize_text_field($a['badge']) : eaf_opt('teaser_badge', '');
+    $t_tags   = eaf_split_tags(isset($atts['tags']) ? $a['tags'] : eaf_opt('teaser_tags', ''));
+    $t_steps  = ($a['steps'] !== '0' && $a['steps'] !== '');
+    $t_fields = $teaser ? eaf_parse_teaser_fields($a['fields']) : array();
+
+    /**
+     * 横幅。数字だけなら px として扱う（width="680"）。width="100%" も指定できる。
+     *
+     * ★ティザーだけでなく本体フォームにも効かせる。テーマによっては本文が
+     *   1400px 以上あり、そのままだとタイルが1枚ずつ巨大になって
+     *   「一覧をひと目で見渡す」というタイルの利点が消える。
+     * 優先順位: ショートコードの width → 設定「フォームの横幅」→ デザインごとの既定。
+     */
+    $t_width = eaf_parse_width($a['width']);
+    if ($t_width === '') {
+        if ($design === 'teaser')          $t_width = '100%';   // 横一列に並べるので本文幅いっぱい
+        elseif ($design === 'teaser-v')    $t_width = '440px';
+        elseif ($design === 'compact')     $t_width = '440px';
+        else {
+            $t_width = eaf_parse_width(eaf_opt('form_width', ''));
+            if ($t_width === '') $t_width = '680px';
+        }
+    }
+
+    /* ★スタイルとスクリプトは WordPress のキューに任せる。
+       ここで直接吐くと、抜粋やOGP生成で先に1回走ったときにそちらへ持っていかれ、
+       読者に見えるフォームが素のHTMLで出てしまう（実際に記事で崩れた）。 */
+    eaf_enqueue_assets();
+
+    $privacy = eaf_opt('privacy_url');
+    /* 1ページに複数置かれる前提。uniqid() は同一リクエスト内で同じ値を返すことがあるため、
+       連番を足して確実に一意にする（idが重なると label が別のフォームの入力欄を指してしまう）。 */
+    static $seq = 0;
+    $uid     = 'fhs-' . uniqid() . '-' . (++$seq);
+
+    // compact では必須項目だけに絞る（メインビジュアル横などに収めるため）
+    $cust_fields = eaf_visible_fields('customer',  eaf_customer_fields(),  $compact);
+    $situ_fields = eaf_visible_fields('situation', eaf_situation_fields(), $compact);
+    $show_mkt    = eaf_flag('show_marketing', false) && !$compact;
+
+    /* ステップは2つだけ:「お困りの内容（概要）→ ご連絡先（個人情報）」。
+       画面を増やすほど離脱するため、聞くことは1画面目にまとめ、個人情報は必ず最後に置く。
+       compact とティザーは元々短いので分けない。 */
+    $stepped     = !$teaser && !$compact && eaf_flag('step_form', true);
+    $step_titles = array('お困りの内容', 'ご連絡先');
+
+    /* 第三者提供の設定は持たない（運営＝施工＝同じ会社の自社サイトに置くフォームのため）。
+       同意文・利用目的は「自社が対応・連絡に使う」の一本に固定する。 */
+    $op_name = eaf_opt('site_name', '当社');
+    /* 急ぎのお客様には電話が最短なので、電話番号はフォームの一番上に出す
+       （本気査定は「電話で済まされると申込が減る」ため伏せていたが、
+        自社サイトの工事問い合わせでは電話も同じ受注。隠す理由がない）。 */
+    $op_tel = eaf_opt('operator_contact', '');
+    $tel_msg = eaf_opt('tel_message', 'お急ぎの方はお電話ください。');
+    $tel_sub = eaf_opt('tel_submessage', '');
+
+    /* ★同意はプライバシーポリシーの1本だけ。
+       免責事項はフォーク元（価格を示す査定フォーム）で要ったもので、
+       このフォームは価格を一切示さない。存在しない文書への同意は求めない。 */
+    $agree_label = ($privacy
+        ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>'
+        : 'プライバシーポリシー') . 'に同意します（必須）';
+
+    /**
+     * 工事内容のタイル選択。
+     *
+     * ★セレクトは「開く→探す→選ぶ」の3動作だが、タイルは押すだけの1動作で済む。
+     *   さらに選択肢が最初から一覧で見えるので、「電気工事を頼みたい」までしか
+     *   決まっていない読者が、自分の用件をこの一覧から言い当てられる。
+     *   この層が流入の最大勢力なので、一覧の網羅性が反響数に直結する。
+     */
+    $render_ptype_tiles = function ($uid, $name = 'ptype', $with_note = false, $labelledby = '') {
+        ob_start(); ?>
+        <div class="fhs-tiles" role="group"<?php echo $labelledby ? ' aria-labelledby="' . esc_attr($labelledby) . '"' : ''; ?>>
+<?php foreach ($GLOBALS['EAF_PTYPE_LABEL'] as $k => $v):
+        $short = isset($GLOBALS['EAF_PTYPE_SHORT'][$k]) ? $GLOBALS['EAF_PTYPE_SHORT'][$k] : $v;
+        $note  = isset($GLOBALS['EAF_PTYPE_NOTE'][$k])  ? $GLOBALS['EAF_PTYPE_NOTE'][$k]  : '';
+        $tid = $uid . '-tile-' . $k; ?>
+          <input type="radio" name="<?php echo esc_attr($name); ?>" id="<?php echo esc_attr($tid); ?>" value="<?php echo esc_attr($k); ?>" class="fhs-tile-input">
+          <label class="fhs-tile fhs-tile-<?php echo esc_attr($k); ?>" for="<?php echo esc_attr($tid); ?>">
+            <?php echo eaf_ptype_icon($k); ?>
+            <span class="fhs-tile-t"><?php echo esc_html($short); ?></span>
+<?php if ($with_note && $note !== ''): ?>
+            <span class="fhs-tile-n"><?php echo esc_html($note); ?></span>
+<?php endif; ?>
+          </label>
+<?php endforeach; ?>
+        </div>
+<?php return ob_get_clean();
+    };
+
+    /** ティザー1項目ぶんのHTML（STEP表記つき） */
+    $render_teaser_field = function ($key, $fd, $i, $uid) use ($render_ptype_tiles, $t_steps) {
+        $nm = eaf_teaser_form_name($key);
+        $id = $uid . '-t-' . $key;
+        ob_start(); ?>
+        <div class="fhs-tfield fhs-tfield-<?php echo esc_attr($key); ?>">
+          <label<?php echo $fd['type'] === 'ptype' ? '' : ' for="' . esc_attr($id) . '"'; ?>>
+<?php if ($t_steps): ?><span class="fhs-step">STEP <?php echo (int)$i; ?></span><?php endif; ?>
+            <?php echo esc_html($fd['label']); ?>
+          </label>
+<?php if ($fd['type'] === 'ptype'): ?>
+          <?php echo $render_ptype_tiles($uid, 'ptype'); ?>
+<?php elseif ($fd['type'] === 'select'): ?>
+          <select name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed">
+            <option value="">選択してください</option>
+<?php foreach (eaf_opt_list($fd['opts']) as $o): ?>
+            <option value="<?php echo esc_attr($o); ?>"><?php echo esc_html($o); ?></option>
+<?php endforeach; ?>
+          </select>
+<?php else: ?>
+          <input type="text" name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" placeholder="<?php echo esc_attr(isset($fd['ph']) ? $fd['ph'] : ''); ?>">
+<?php endif; ?>
+        </div>
+<?php return ob_get_clean();
+    };
+
+    /** 1項目ぶんのHTML（ラベル＋入力欄）。$prefix はPOSTキーの接頭辞 */
+    $render_field = function ($fd, $prefix, $uid) {
+        $nm   = $prefix . $fd['key'];
+        $req  = ($fd['mode'] === 'req');
+        $full = ($fd['type'] === 'textarea');
+        $id   = $uid . '-' . $nm;
+        ob_start(); ?>
+        <div class="fhs-field<?php echo $full ? ' fhs-full' : ''; ?>">
+<?php if ($fd['type'] === 'check'): ?>
+          <div class="fhs-check">
+            <input type="checkbox" name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" value="1">
+            <label for="<?php echo esc_attr($id); ?>"><?php echo esc_html($fd['chk']); ?></label>
+          </div>
+<?php else: ?>
+          <label for="<?php echo esc_attr($id); ?>"><?php echo esc_html($fd['label']); ?><?php echo $req ? '<span class="fhs-req">必須</span>' : '<span class="fhs-opt">任意</span>'; ?></label>
+<?php if ($fd['type'] === 'select'): ?>
+          <select name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" data-req="<?php echo $req ? '1' : ''; ?>">
+            <option value="">選択してください</option>
+<?php foreach (eaf_opt_list($fd['opts']) as $o): ?>
+            <option value="<?php echo esc_attr($o); ?>"><?php echo esc_html($o); ?></option>
+<?php endforeach; ?>
+          </select>
+<?php elseif ($fd['type'] === 'textarea'): ?>
+          <textarea name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" data-req="<?php echo $req ? '1' : ''; ?>" rows="2" placeholder="<?php echo esc_attr(isset($fd['ph']) ? $fd['ph'] : ''); ?>"></textarea>
+<?php else:
+        /* 数値は type="number" にしない。全角数字を打つとブラウザが値を空にしてしまい、
+           「入力したのに必須エラーが出る」状態になるため。inputmode でキーパッドだけ出す。 */
+        $type = 'text'; $extra = '';
+        if ($fd['type'] === 'number') { $extra = ' inputmode="decimal"'; }
+        elseif ($fd['type'] === 'tel') { $type = 'tel'; $extra = ' inputmode="tel" autocomplete="tel"'; }
+        elseif ($fd['key'] === 'name') { $extra = ' autocomplete="name"'; }
+?>
+          <input type="<?php echo $type; ?>"<?php echo $extra; ?> name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" data-req="<?php echo $req ? '1' : ''; ?>" placeholder="<?php echo esc_attr(isset($fd['ph']) ? $fd['ph'] : ''); ?>">
+<?php endif; ?>
+<?php endif; ?>
+        </div>
+<?php return ob_get_clean();
+    };
+
+    ob_start(); ?>
+<div class="fhs-wrap fhs-design-<?php echo esc_attr($design); ?>" id="<?php echo esc_attr($uid); ?>"
+  data-fhs-teaser="<?php echo $teaser ? '1' : ''; ?>" data-fhs-target="<?php echo esc_attr($t_target); ?>"<?php
+  echo $t_width ? ' style="max-width:' . esc_attr($t_width) . '"' : ''; ?>>
+
+  <div class="fhs-card fhs-form-card">
+<?php if ($glued && current_user_can('manage_options')): ?>
+    <div class="fhs-admin-warn fhs-admin-note"><strong>【この行は管理者にだけ見えています】ショートコードの属性の間に半角スペースが足りません。</strong><br>
+      いまは自動で読み取って表示していますが、<code>"</code> と次の属性の間に<strong>半角スペース</strong>を入れてください。<br>
+      × <code>url="/○○○/form/"width="640"</code>　→　○ <code>url="/○○○/form/" width="640"</code></div>
+<?php endif; ?>
+<?php if ($teaser): /* ===== 入口フォーム（ティザー）===== */ ?>
+<?php if (!$t_target && current_user_can('manage_options')): ?>
+    <div class="fhs-admin-warn"><strong>【この行は管理者にだけ見えています】</strong><br>
+      ティザーの遷移先が決まっていません。次のどちらかで設定してください。<br>
+      ① <a href="<?php echo esc_url(admin_url('admin.php?page=eamber-form')); ?>">設定 → 基本設定 → お問い合わせページ</a> で、<code>[eamber_form]</code> を貼ったページを選ぶ（<strong>おすすめ</strong>。以後どのティザーにも効きます）<br>
+      ② このショートコードに <code>url="https://…/○○○/form/"</code> を追加する</div>
+<?php endif; ?>
+    <div class="fhs-errors"></div>
+    <form class="fhs-form">
+      <div class="fhs-thead">
+        <div class="fhs-ttexts">
+<?php /* タグを先に置く。縦ではこの順（タグ→バッジ→見出し）がそのまま見た目の順になり、
+         読み上げの順序とも一致する。横長は1行に並べるので、CSSのorderで位置だけ入れ替える。 */ ?>
+<?php if ($t_tags): ?>
+          <div class="fhs-ttags">
+<?php foreach ($t_tags as $tag): ?>
+            <span class="fhs-ttag"><?php echo esc_html($tag); ?></span>
+<?php endforeach; ?>
+          </div>
+<?php endif; ?>
+<?php if ($t_badge !== ''): ?>
+          <div class="fhs-tbadge-row"><span class="fhs-tbadge"><?php echo esc_html($t_badge); ?></span></div>
+<?php endif; ?>
+          <div class="fhs-ttitle"><?php if ($t_logo): ?><img class="fhs-ticon" src="<?php echo esc_url($t_logo); ?>" alt="<?php echo esc_attr(eaf_opt('site_name', '')); ?>"><?php endif; ?><?php echo esc_html($t_title); ?></div>
+<?php if ($t_sub !== ''): ?>
+          <div class="fhs-tsub"><?php echo esc_html($t_sub); ?></div>
+<?php endif; ?>
+        </div>
+      </div>
+      <div class="fhs-trow">
+<?php $t_reg = eaf_teaser_fields(); $ti = 1;
+      foreach ($t_fields as $tk) { echo $render_teaser_field($tk, $t_reg[$tk], $ti++, $uid); } ?>
+        <div class="fhs-tcta">
+          <button class="fhs-submit" type="submit"><?php echo esc_html($btn); ?></button>
+        </div>
+      </div>
+      <?php /* 注記は文ごとに行を分ける。1つの段落にすると幅によって
+               「…送信されませ／ん。」のように中途半端な位置で折り返してしまう。
+               note属性では | で行を区切れる。 */ ?>
+      <div class="fhs-tnote">
+<?php foreach ($t_note_lines as $ln): ?>
+        <span><?php echo esc_html($ln); ?></span>
+<?php endforeach; ?>
+      </div>
+          </form>
+<?php else: /* ===== 通常のフォーム ===== */ ?>
+<?php if ($op_tel !== ''): ?>
+    <div class="fhs-telbar">
+      <span class="fhs-telbar-msg"><?php echo esc_html($tel_msg); ?></span>
+      <a class="fhs-telbar-num" href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h3l1.5 4-2 1.4a11 11 0 0 0 5.1 5.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z"/></svg><?php echo esc_html($op_tel); ?></a>
+<?php if ($tel_sub !== ''): ?>
+      <span class="fhs-telbar-sub"><?php echo esc_html($tel_sub); ?></span>
+<?php endif; ?>
+    </div>
+<?php endif; ?>
+<?php $lead = eaf_opt('lead_text'); if ($lead !== ''): ?>
+    <div class="fhs-lead"><?php echo esc_html($lead); ?></div>
+<?php endif; ?>
+    <div class="fhs-errors"></div>
+    <form class="fhs-form">
+      <?php /* ボット対策。人には見えず、自動入力ツールだけが埋める欄 */ ?>
+      <div class="fhs-hp" aria-hidden="true">
+        <label for="<?php echo esc_attr($uid . '-website'); ?>">ウェブサイト（入力しないでください）</label>
+        <input type="text" name="eaf_website" id="<?php echo esc_attr($uid . '-website'); ?>" tabindex="-1" autocomplete="off">
+      </div>
+
+<?php if ($stepped): /* 進み具合。ゴールが見えると最後まで書いてもらいやすい */ ?>
+      <div class="fhs-steps">
+        <div class="fhs-stepbar">
+<?php for ($i = 1; $i <= count($step_titles); $i++): ?>
+          <span class="fhs-stepdot" data-step="<?php echo $i; ?>"></span>
+<?php endfor; ?>
+        </div>
+        <div class="fhs-stepnow"></div>
+      </div>
+<?php endif; ?>
+
+<?php if ($stepped): ?><div class="fhs-formstep" data-step="1"><?php endif; ?>
+      <?php /* 見出しは置かない。問いかけそのものが見出しとして働くので、
+               「お困りの内容」と重ねると同じことを2回言うことになる。 */ ?>
+      <div class="fhs-ptype-field">
+        <span class="fhs-tile-q" id="<?php echo esc_attr($uid . '-ptq'); ?>">どんなことでお困りですか？<span class="fhs-req">必須</span></span>
+        <?php echo $render_ptype_tiles($uid, 'ptype', true, $uid . '-ptq'); ?>
+      </div>
+
+      <?php /* ★工事内容ごとの質問はタイルのすぐ下に置く。
+               押したタイルへの返事なので、市町村を挟むと話が飛んで見える。 */ ?>
+<?php foreach (eaf_property_fields() as $pt => $flds):
+        $vis = eaf_visible_fields('prop_' . $pt, $flds, $compact);
+        if (!$vis) continue; ?>
+      <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
+<?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
+      </div>
+<?php endforeach; ?>
+
+      <label for="<?php echo esc_attr($uid . '-address'); ?>">お住まい・現場の市町村<span class="fhs-req">必須</span></label>
+      <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" required>
+        <option value="">選択してください</option>
+<?php foreach (eaf_opt_list('city') as $ct): ?>
+        <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
+<?php endforeach; ?>
+      </select>
+<?php $city_hint = eaf_opt('city_hint', ''); if ($city_hint !== ''): ?>
+      <div class="fhs-hint"><?php echo esc_html($city_hint); ?></div>
+<?php endif; ?>
+<?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>
+<?php if ($situ_fields): ?>
+      <div class="fhs-group">
+<?php   foreach ($situ_fields as $fd) { echo $render_field($fd, 'situation_', $uid); } ?>
+      </div>
+<?php endif; ?>
+
+<?php if ($stepped): ?></div><?php endif; /* step 1 ここまで */ ?>
+
+<?php if ($stepped): ?><div class="fhs-formstep" data-step="2" style="display:none"><?php endif; ?>
+      <div class="fhs-section">ご連絡先</div>
+<?php if ($cust_fields): ?>
+      <div class="fhs-group">
+<?php   foreach ($cust_fields as $fd) { echo $render_field($fd, 'customer_', $uid); } ?>
+      </div>
+<?php endif; ?>
+      <label for="<?php echo esc_attr($uid . '-email'); ?>">メールアドレス<span class="fhs-opt">任意</span></label>
+      <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email">
+      <div class="fhs-hint">ご入力いただくと、受付内容の控えをメールでお送りします</div>
+
+      <?php /* 個人情報の利用目的の明示（個情法21条）。同意を求める直前に必ず出す。
+               プライバシーポリシーURLが未設定でも、最低限ここで目的が伝わるようにしておく。 */ ?>
+      <div class="fhs-privacy-note">
+        <strong>個人情報の取り扱いについて</strong><br>
+        ご入力いただいた内容は、<?php echo esc_html($op_name); ?>が<strong>お問い合わせへの対応とご連絡、およびそれに関するご案内</strong>のために利用します。<br>
+        ご本人の同意なく第三者に提供することはありません。<br>
+        削除をご希望の場合は、<?php echo $privacy
+            ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>に記載の窓口'
+            : '当社の窓口'; ?>までお申し付けください。
+      </div>
+
+      <div class="fhs-check">
+        <input type="checkbox" name="agree" id="<?php echo esc_attr($uid . '-agree'); ?>" value="1" required>
+        <label for="<?php echo esc_attr($uid . '-agree'); ?>"><?php echo $agree_label; ?></label>
+      </div>
+<?php if ($show_mkt): ?>
+      <div class="fhs-check">
+        <input type="checkbox" name="marketing" id="<?php echo esc_attr($uid . '-mkt'); ?>" value="1">
+        <label for="<?php echo esc_attr($uid . '-mkt'); ?>">工事・メンテナンスに関するご案内やお役立ち情報のメール受け取りを希望します（任意）</label>
+      </div>
+<?php endif; ?>
+<?php if ($compact): ?>
+      <input type="hidden" name="compact" value="1">
+<?php endif; ?>
+<?php if ($stepped): ?></div><?php endif; /* 最終ステップ ここまで */ ?>
+
+      <div class="fhs-nav">
+<?php if ($stepped): ?>
+        <button type="button" class="fhs-back" style="display:none">← 戻る</button>
+        <button type="button" class="fhs-nextstep">次へ進む</button>
+<?php endif; ?>
+        <button class="fhs-submit" type="submit"<?php echo $stepped ? ' style="display:none"' : ''; ?>><?php echo esc_html($btn); ?></button>
+      </div>
+    </form>
+<?php endif; /* ===== 分岐ここまで ===== */ ?>
+
+<?php /* 会社紹介の欄はあえて置かない。このフォームは自社サイトに置く前提で、
+         「どこの会社か」はサイト自体が示している（本気査定のような
+         運営と査定会社が別のケースではないため）。 */ ?>
+  </div>
+
+  <div class="fhs-card fhs-result" style="display:none"></div>
+</div>
+
 <?php
     return ob_get_clean();
 }

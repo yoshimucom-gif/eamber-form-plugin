@@ -86,6 +86,37 @@ function apply_filters($tag, $value) {
     foreach ($GLOBALS['FAKE_HOOKS'][$tag] as $cb) $value = call_user_func($cb, $value);
     return $value;
 }
+/* ---------------- スタイル/スクリプトのキュー ----------------
+   本物と同じく「ハンドル単位で1回だけ」を再現する。
+   積まれたインラインCSS/JSは fake_inline_style() / fake_inline_script() で取り出す。 */
+$GLOBALS['FAKE_ASSETS'] = array('reg' => array(), 'enq' => array(), 'css' => '', 'js' => '');
+function wp_register_style($h, $src = false, $deps = array(), $ver = null, $media = 'all') {
+    $GLOBALS['FAKE_ASSETS']['reg']['style:' . $h] = true;
+}
+function wp_register_script($h, $src = false, $deps = array(), $ver = null, $footer = false) {
+    $GLOBALS['FAKE_ASSETS']['reg']['script:' . $h] = true;
+}
+function wp_enqueue_style($h, $src = '', $deps = array(), $ver = null, $media = 'all') {
+    $GLOBALS['FAKE_ASSETS']['enq']['style:' . $h] = true;
+}
+function wp_enqueue_script($h, $src = '', $deps = array(), $ver = null, $footer = false) {
+    $GLOBALS['FAKE_ASSETS']['enq']['script:' . $h] = true;
+}
+function wp_style_is($h, $list = 'enqueued') {
+    $k = ($list === 'registered') ? 'reg' : 'enq';
+    return !empty($GLOBALS['FAKE_ASSETS'][$k]['style:' . $h]);
+}
+function wp_script_is($h, $list = 'enqueued') {
+    $k = ($list === 'registered') ? 'reg' : 'enq';
+    return !empty($GLOBALS['FAKE_ASSETS'][$k]['script:' . $h]);
+}
+function wp_add_inline_style($h, $css)  { $GLOBALS['FAKE_ASSETS']['css'] .= $css; return true; }
+function wp_add_inline_script($h, $js)  { $GLOBALS['FAKE_ASSETS']['js']  .= $js;  return true; }
+function wp_enqueue_media() {}
+function fake_inline_style()  { return $GLOBALS['FAKE_ASSETS']['css']; }
+function fake_inline_script() { return $GLOBALS['FAKE_ASSETS']['js']; }
+function fake_assets_reset()  { $GLOBALS['FAKE_ASSETS'] = array('reg'=>array(),'enq'=>array(),'css'=>'','js'=>''); }
+
 function register_activation_hook($file, $cb) { $GLOBALS['FAKE_ACTIVATE'][] = $cb; }
 function add_shortcode($tag, $cb) { $GLOBALS['FAKE_SHORTCODES'][$tag] = $cb; }
 function do_shortcode_call($tag, $atts = array()) { return call_user_func($GLOBALS['FAKE_SHORTCODES'][$tag], $atts); }

@@ -33,7 +33,21 @@ t('必須になっている',                   preg_match('/お住まい・現�
 foreach (array('甲府市', '丹波山村', '山梨県外') as $c) {
     t('選択肢: ' . $c, strpos($html, '>' . $c . '</option>') !== false, true);
 }
-t('番地を求めない案内',                 strpos($html, '番地までは不要です') !== false, true);
+/* 補足文は既定では出さない。書きたいことがあるときだけ設定で出す（出し分け）。
+   ★fhs-hint は完了画面のテンプレート（JS内）にも出るので、
+     市町村欄から次のラベルまでの区間だけを切り出して見る。 */
+function city_block($html) {
+    $i = strpos($html, 'name="address"');
+    if ($i === false) return '';
+    $seg = substr($html, $i);
+    $j = strpos($seg, '<label');
+    return $j === false ? $seg : substr($seg, 0, $j);
+}
+t('既定では補足文を出さない', strpos(city_block($html), 'fhs-hint') !== false, false);
+update_option(EAF_OPT, eaf_sanitize_options(array('city_hint' => '番地までは不要です')));
+$h2 = eaf_shortcode(array());
+t('設定すれば補足文が出る',   strpos(city_block($h2), '番地までは不要です') !== false, true);
+update_option(EAF_OPT, eaf_sanitize_options(array()));
 
 /* --- 3. ティザーでもセレクトで出て、本フォームの address 欄へ引き継がれる --- */
 $teaser = eaf_shortcode(array('design' => 'teaser', 'url' => '/contact/', 'fields' => 'ptype,address'));

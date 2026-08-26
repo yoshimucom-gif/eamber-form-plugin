@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.2.1\n・フォームの書体を Noto Sans JP に変更しました。丸ゴシックはフォームだけが浮いて見えたためです。やわらかさは角丸とタイルの配色で出しています\n・ティザーのタイルも本体と同じ3×3に。記事の幅が広いページで5枚＋4枚に割れていたのを直しました"
+    "changelog": "1.3.0\n・タイルの配色を3パターンから選べるようにしました（設定→デザイン→配色パターン）。既定はサイトになじむ「ブランド（紺×アンバー）」です\n・フォーム全体の既定色を、サイトに合わせた紺×アンバーに変更しました。進み具合のバーもボタンと同じ色にしています\n・タイルや入力欄の角を控えめにしました\n・市町村欄の補足文を設定できるようにしました（既定は非表示）"
   }
 }

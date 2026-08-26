@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.2.1
+ * Version: 1.3.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.2.1');
+define('EAF_VER', '1.3.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -406,7 +406,7 @@ function eaf_form_url() {
  *   「コードの既定を変えたのに、保存済みの環境では何も変わらない」状態になる。
  *   ここを上げた更新では、保存済みのモードを一度だけ捨てて既定に戻す。
  */
-define('EAF_FIELD_DEFAULTS_VER', '4');   // 4 = 営業案内チェックも既定オフへ
+define('EAF_FIELD_DEFAULTS_VER', '5');   // 5 = 配色をサイト（紺×アンバー）に合わせる
 
 function eaf_maybe_reset_field_modes() {
     if (get_option('eaf_field_defaults_ver') === EAF_FIELD_DEFAULTS_VER) return;
@@ -421,6 +421,12 @@ function eaf_maybe_reset_field_modes() {
         unset($o['show_note']);
         unset($o['show_marketing']);
         unset($o['spam_block_link']);
+        /* フォーク元の既定色そのままなら捨てて、サイトに合わせた新しい既定に任せる。
+           手で選んだ色は消さない。 */
+        foreach (array('color_brand' => '#1f6feb', 'color_title' => '#1f6feb',
+                       'color_badge' => '#ff5a36', 'color_btn_text' => '#ffffff') as $k => $old) {
+            if (isset($o[$k]) && strtolower($o[$k]) === $old) unset($o[$k]);
+        }
         /* フォーク元（不動産の査定フォーム）の既定が保存されたままの環境があるため、
            その値そのものだったときだけ捨てる。手で入れた社名は壊さない。 */
         if (isset($o['site_name']) && $o['site_name'] === '不動産査定') unset($o['site_name']);
@@ -587,18 +593,20 @@ function eaf_sanitize_options($in) {
         'teaser_tags'      => sanitize_text_field($in['teaser_tags'] ?? ''),
         'form_page_id'    => (int) ($in['form_page_id'] ?? 0),
         'form_width'       => sanitize_text_field($in['form_width'] ?? ''),
+        'tile_palette'     => (array_key_exists($in['tile_palette'] ?? '', eaf_tile_palettes()) ? $in['tile_palette'] : 'brand'),
         // 自動返信メール
         'mail_subject'     => sanitize_text_field($in['mail_subject'] ?? ''),
         'mail_body'        => sanitize_textarea_field($in['mail_body'] ?? ''),
         // 見出し・ボタン
         'lead_text'        => sanitize_textarea_field($in['lead_text'] ?? ''),
+        'city_hint'        => sanitize_text_field($in['city_hint'] ?? ''),
         // 装飾（色）
-        'color_brand'      => sanitize_hex_color($in['color_brand'] ?? '')    ?: '#1f6feb',
+        'color_brand'      => sanitize_hex_color($in['color_brand'] ?? '')    ?: '#1E3050',
         // 空欄ならブランドカラーを使う（ボタンだけ目立つ色にしたい場合に指定）
         'color_btn_bg'     => sanitize_hex_color($in['color_btn_bg'] ?? '')   ?: '',
-        'color_btn_text'   => sanitize_hex_color($in['color_btn_text'] ?? '') ?: '#ffffff',
-        'color_title'      => sanitize_hex_color($in['color_title'] ?? '')    ?: '#1f6feb',
-        'color_badge'      => sanitize_hex_color($in['color_badge'] ?? '')    ?: '#ff5a36',
+        'color_btn_text'   => sanitize_hex_color($in['color_btn_text'] ?? '') ?: '#1E3050',
+        'color_title'      => sanitize_hex_color($in['color_title'] ?? '')    ?: '#1E3050',
+        'color_badge'      => sanitize_hex_color($in['color_badge'] ?? '')    ?: '#E8A33D',
     );
     // 各項目のモード（必須／任意／非表示）。スキーマを回して必ず明示値を保存する
     foreach (eaf_all_groups() as $g => $flds) {
@@ -642,6 +650,67 @@ $GLOBALS['EAF_PTYPE_SHORT'] = array(
     'business' => '店舗・事務所・工場',
     'other'    => 'まだ決まっていない',
 );
+
+/**
+ * タイルの配色。
+ *
+ * ★サイト本体（紺×アンバーの2色）から浮かないことを最優先にする。
+ *   9枚を9色で塗ると、フォームだけが賑やかになって信用の面で損をする。
+ *   一方で見分けやすさも要るので、色ではなくアイコンと代表例で差をつけ、
+ *   「いま選んでいる1枚」だけをアンバーで際立たせる。
+ */
+function eaf_tile_palettes() {
+    return array(
+        'brand' => array(
+            'label' => 'ブランド（紺×アンバー）　※サイトになじみます',
+            'base'  => array('#F1F3F7', '#2A3F5F'),
+            'sel'   => array('#FBF1DF', '#9A6414', '#E8A33D'),
+        ),
+        'amber' => array(
+            'label' => 'やわらかアンバー（暖色でまとめる）',
+            'base'  => array('#FBF4E9', '#8A6420'),
+            'sel'   => array('#F4E1BF', '#7A5310', '#DE9A2E'),
+        ),
+        'colorful' => array(
+            'label' => 'カラフル（内容ごとに色を変える）',
+            'tiles' => array(
+                'aircon'   => array('#EAF4FF', '#2F6BA8'),
+                'breaker'  => array('#FFF2DE', '#A9660B'),
+                'intercom' => array('#EDF7EE', '#3F7A4B'),
+                'outlet'   => array('#FCEDF1', '#A6486A'),
+                'light'    => array('#F3EFFC', '#6A56A8'),
+                'fan'      => array('#EAF6F6', '#2F7E7E'),
+                'wiring'   => array('#FDF1E6', '#A85F2B'),
+                'business' => array('#EFF1F6', '#4C5878'),
+                'other'    => array('#F5F3EF', '#6B6155'),
+            ),
+        ),
+    );
+}
+
+/** 選ばれている配色をCSSにする（スタイルブロックに差し込む） */
+function eaf_tile_palette_css() {
+    $all = eaf_tile_palettes();
+    $key = eaf_opt('tile_palette', 'brand');
+    if (!isset($all[$key])) $key = 'brand';
+    $p = $all[$key];
+    $css = '';
+    if (isset($p['tiles'])) {
+        foreach ($p['tiles'] as $k => $c) {
+            $css .= '    .fhs-tile-' . $k . '{--t-bg:' . $c[0] . ';--t-fg:' . $c[1] . "}
+";
+        }
+    } else {
+        $css .= '    .fhs-wrap .fhs-tile{--t-bg:' . $p['base'][0] . ';--t-fg:' . $p['base'][1] . "}
+";
+    }
+    if (isset($p['sel'])) {
+        $css .= '    .fhs-wrap{--t-sel-bg:' . $p['sel'][0] . ';--t-sel-fg:' . $p['sel'][1]
+              . ';--t-sel-bd:' . $p['sel'][2] . "}
+";
+    }
+    return $css;
+}
 
 /**
  * タイルのアイコン。
@@ -1006,7 +1075,7 @@ function eaf_test_mail() {
  * ======================================================================= */
 /**
  * 色の入力欄。カラーピッカーだけだと「いま何番の色なのか」が分からず、
- * ブランドカラーの指定（#1f6feb など）を貼り付けることもできないため、
+ * ブランドカラーの指定（#1E3050 など）を貼り付けることもできないため、
  * ★HEXのテキスト入力を主にして、ピッカーは横に並べる。両者は双方向に同期する。
  */
 function eaf_color_field($key, $default) {
@@ -1134,6 +1203,10 @@ function eaf_settings_page() {
                 <tr><th>フォーム冒頭の案内文</th><td>
                     <textarea name="<?php echo EAF_OPT; ?>[lead_text]" rows="3" style="width:100%;max-width:760px"><?php echo esc_textarea(eaf_opt('lead_text')); ?></textarea>
                     <p class="description">フォームの一番上に表示される案内文（任意）。例：「症状とお住まいの市町村が分かれば話が始められます。まずはお気軽にお問い合わせください。」</p></td></tr>
+                <tr><th>市町村欄の補足文</th><td>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[city_hint]" value="<?php echo esc_attr(eaf_opt('city_hint')); ?>" size="60" placeholder="例：番地までは不要です。詳しい場所は折り返しの際にうかがいます">
+                    <p class="description">市町村の選択欄の下に小さく出る一行。<strong>空欄なら何も表示しません（既定）。</strong>
+                    選択式なので番地の説明は基本不要ですが、書き添えたいことがあるときに使ってください。</p></td></tr>
                 <tr><th>お問い合わせページ</th><td>
                     <?php
                     $sid = (int) eaf_opt('form_page_id', 0);
@@ -1325,33 +1398,62 @@ function eaf_settings_page() {
             </table>
             <p class="description">いずれも、ショートコードで <code>badge="…"</code> <code>tags="…"</code> <code>logo="…"</code> を指定すると、そのフォームだけ差し替えられます。</p>
 
-            <h3>フォームの色</h3>
-            <p class="description">カラーコード（<code>#1f6feb</code> のような6桁）を直接入力できます。左の四角を押すとカラーピッカーからも選べます。</p>
+            <h3>タイルの配色</h3>
+            <p class="description" style="max-width:900px">
+                工事内容のタイル9枚の色です。<strong>サイト全体になじむかどうかで選んでください。</strong>
+                色数を増やすと見分けはつきやすくなりますが、フォームだけが賑やかになって浮きます。
+            </p>
             <table class="form-table">
-                <tr><th>ブランドカラー</th><td>
-                    <?php echo eaf_color_field('color_brand', '#1f6feb'); ?>
-                    <p class="description">入力済みチェック（✓）、次の入力欄のハイライト、工事内容で選んだタイル、メリットのタグに使われます。</p>
-                </td></tr>
-                <tr><th>ボタンの背景色</th><td>
-                    <?php echo eaf_color_field('color_btn_bg', '#e65100'); ?>
+                <tr><th>配色パターン</th><td>
+                    <select name="<?php echo EAF_OPT; ?>[tile_palette]">
+<?php foreach (eaf_tile_palettes() as $pk => $pv): ?>
+                        <option value="<?php echo esc_attr($pk); ?>"<?php selected(eaf_opt('tile_palette', 'brand'), $pk); ?>><?php echo esc_html($pv['label']); ?></option>
+<?php endforeach; ?>
+                    </select>
                     <p class="description">
-                        送信ボタン・「次へ進む」ボタンの背景色。<strong>空欄なら <code>#e65100</code>（オレンジ）</strong>です。<br>
-                        問い合わせ系サイトのボタンは<strong>暖色（オレンジ〜赤）</strong>が定番です。
-                        色そのものより「<strong>まわりから浮いているか</strong>」が効くので、紺や白が基調のページでは暖色が有利です。<br>
-                        ブランドカラーに合わせたい場合は、上のブランドカラーと同じ値を入れてください。
+                        <strong>ブランド</strong>…9枚を同じ淡い色にして、選んだ1枚だけをアンバーで際立たせます。落ち着いた見た目で、紺×アンバーのサイトになじみます。<br>
+                        <strong>やわらかアンバー</strong>…全体を暖色でまとめます。ブランドより親しみが出ます。<br>
+                        <strong>カラフル</strong>…内容ごとに9色。探しやすさは最大ですが、賑やかになります。<br>
+                        <span class="description">※どのパターンでも、アイコンと代表例（「落ちる・停電・アンペア変更」など）は出るので、色が無くても見分けはつきます。</span>
                     </p>
                 </td></tr>
-                <tr><th>ボタンの文字色</th><td><?php echo eaf_color_field('color_btn_text', '#ffffff'); ?></td></tr>
+            </table>
+
+            <h3>フォームの色</h3>
+            <p class="description">カラーコード（<code>#1E3050</code> のような6桁）を直接入力できます。左の四角を押すとカラーピッカーからも選べます。</p>
+            <table class="form-table">
+                <tr><th>ブランドカラー</th><td>
+                    <?php echo eaf_color_field('color_brand', '#1E3050'); ?>
+                    <p class="description">
+                        入力済みチェック（✓）、「必須」の印、見出しの丸、入力中の枠、メリットのタグに使われます。<br>
+                        <strong>画面の骨組みの色</strong>なので、サイトの見出しやヘッダーと同じ色にすると落ち着きます（初期値はサイトに合わせた紺）。
+                    </p>
+                </td></tr>
+                <tr><th>ボタンの背景色</th><td>
+                    <?php echo eaf_color_field('color_btn_bg', '#E8A33D'); ?>
+                    <p class="description">
+                        送信ボタン・「次へ進む」ボタン、そして<strong>進み具合のバー</strong>の色。<strong>空欄なら <code>#E8A33D</code>（アンバー）</strong>です。<br>
+                        <strong>行動をうながす色</strong>なので、サイトの「お問合せ」ボタンと同じ色にするのが自然です。
+                        進み具合のバーを同じ色にしてあるのは、向かっている先とバーの色を結びつけるためです。
+                    </p>
+                </td></tr>
+                <tr><th>ボタンの文字色</th><td>
+                    <?php echo eaf_color_field('color_btn_text', '#1E3050'); ?>
+                    <p class="description">
+                        初期値は紺です。<strong>アンバーの上に白文字だと薄くて読みにくい</strong>ため、紺にしてあります。
+                        サイトのボタンと完全にそろえたい場合は <code>#ffffff</code> にしてください。
+                    </p>
+                </td></tr>
                 <tr><th>見出しの色</th><td>
-                    <?php echo eaf_color_field('color_title', '#1f6feb'); ?>
+                    <?php echo eaf_color_field('color_title', '#1E3050'); ?>
                     <p class="description">ティザーの見出し（例：60秒でかんたん入力）の文字色。</p>
                 </td></tr>
-                <tr><th>「必須」バッジの色</th><td>
-                    <?php echo eaf_color_field('color_badge', '#ff5a36'); ?>
-                    <p class="description">未入力の項目に付くバッジと、ティザーの「無料・秘密厳守」バッジ。入力すると「ブランドカラーの ✓」に変わります。</p>
+                <tr><th>バッジの色</th><td>
+                    <?php echo eaf_color_field('color_badge', '#E8A33D'); ?>
+                    <p class="description">ティザーの「無料・秘密厳守」バッジの色です。</p>
                 </td></tr>
             </table>
-            <p class="description">初期値：ブランド <code>#1f6feb</code> ／ ボタン文字 <code>#ffffff</code> ／ 見出し <code>#1f6feb</code> ／ バッジ <code>#ff5a36</code><br>
+            <p class="description">初期値：ブランド <code>#1E3050</code> ／ ボタン <code>#E8A33D</code> ／ ボタン文字 <code>#1E3050</code> ／ 見出し <code>#1E3050</code> ／ バッジ <code>#E8A33D</code><br>
                 空欄のまま保存すると初期値に戻ります。</p>
             </div>
 
@@ -1993,16 +2095,15 @@ function eaf_shortcode($atts = array()) {
         }
     }
 
-    $c_brand    = eaf_opt('color_brand', '#1f6feb');
-    $c_btn_text = eaf_opt('color_btn_text', '#ffffff');
-    /* 送信ボタンの色。未指定なら暖色（オレンジ）。
-       問い合わせ系サイトのCTAは暖色（オレンジ〜赤）が定番で、
-       紺・白が基調のフォームでは暖色が最も浮く。
-       #e65100 は白文字とのコントラストが 3.79:1 あり、大きな太字なら読みやすさの基準を満たす
-       （#ff9900 のような明るいオレンジは 2.14:1 しかなく、白文字が沈む）。 */
-    $c_btn_bg   = eaf_opt('color_btn_bg', '') ?: '#e65100';
-    $c_title    = eaf_opt('color_title', '#1f6feb');
-    $c_badge    = eaf_opt('color_badge', '#ff5a36');
+    $c_brand    = eaf_opt('color_brand', '#1E3050');
+    $c_btn_text = eaf_opt('color_btn_text', '#1E3050');
+    /* 送信ボタンの色。未指定ならサイトの「お問合せ」ボタンと同じアンバー。
+       ★文字色は白ではなく紺にしてある。#E8A33D に白文字はコントラスト 2.4:1 しかなく
+         沈むが、紺(#1E3050)を載せると 6.1:1 で確実に読める。
+         サイトのボタンと完全にそろえたい場合は設定で #ffffff にできる。 */
+    $c_btn_bg   = eaf_opt('color_btn_bg', '') ?: '#E8A33D';
+    $c_title    = eaf_opt('color_title', '#1E3050');
+    $c_badge    = eaf_opt('color_badge', '#E8A33D');
     $c_brand_rgb = eaf_hex_to_rgb($c_brand);
 
     $nonce   = wp_create_nonce('eamber_form');
@@ -2159,7 +2260,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-req.fhs-done{background:var(--fhs-brand);color:#fff;border-radius:50%;width:20px;height:20px;padding:0;font-size:12px;justify-content:center}
     .fhs-lead{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:10px;padding:14px 16px;font-size:16px;color:#374151;margin-bottom:20px;white-space:pre-line}
     /* フォーム冒頭の電話案内。急ぎの読者が最初に目にする位置に置く */
-    .fhs-telbar{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:16px;padding:14px 16px;color:var(--fhs-ink);margin-bottom:18px;text-align:center}
+    .fhs-telbar{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:10px;padding:14px 16px;color:var(--fhs-ink);margin-bottom:18px;text-align:center}
     .fhs-telbar-msg{font-size:15px;font-weight:700;line-height:1.6}
     .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-brand);font-size:27px;font-weight:700;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
     .fhs-wrap .fhs-telbar-num svg{width:22px;height:22px;flex:0 0 auto}
@@ -2170,7 +2271,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-form > .fhs-section:first-child{margin-top:0}
     /* ★チェックボックス・ラジオは対象外にする。padding や角丸が乗ると、
        テーマが自前で描いている環境で丸く潰れるなど表示が壊れる。 */
-    .fhs-wrap input:not([type=checkbox]):not([type=radio]),.fhs-wrap select,.fhs-wrap textarea{width:100%;padding:14px 15px;border:1.5px solid #E2DCD2;border-radius:14px;font-size:18px;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
+    .fhs-wrap input:not([type=checkbox]):not([type=radio]),.fhs-wrap select,.fhs-wrap textarea{width:100%;padding:14px 15px;border:1.5px solid #E2DCD2;border-radius:8px;font-size:18px;background:#fff;box-sizing:border-box;transition:border-color .15s,box-shadow .15s}
     .fhs-wrap input:not([type=checkbox]):not([type=radio]):focus,.fhs-wrap select:focus,.fhs-wrap textarea:focus{outline:none;border-color:var(--fhs-brand);box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.15)}
     /* テーマ側の appearance:none などを打ち消して、ブラウザ標準の四角いチェックに戻す */
     .fhs-wrap input[type=checkbox]{-webkit-appearance:checkbox;appearance:auto;width:auto;min-width:0;height:auto;padding:0;margin:0;border:0;border-radius:0;background:none;box-shadow:none}
@@ -2194,9 +2295,11 @@ function eaf_shortcode($atts = array()) {
     .fhs-steps{margin-bottom:22px}
     .fhs-stepbar{display:flex;gap:6px}
     .fhs-stepdot{flex:1;height:6px;border-radius:3px;background:#e5e7eb;transition:background .25s}
-    .fhs-stepdot.is-on{background:var(--fhs-brand)}
+    /* ★進み具合はボタンと同じ色で塗る。向かっている先と同じ色にすると、
+       どこまで来たかが一目で結びつく */
+    .fhs-stepdot.is-on{background:var(--fhs-btn-bg)}
     .fhs-stepnow{margin-top:9px;font-size:14px;font-weight:700;color:var(--fhs-muted)}
-    .fhs-stepnow b{color:var(--fhs-brand)}
+    .fhs-stepnow b{color:var(--fhs-btn-bg)}
     .fhs-nav{display:flex;gap:12px;align-items:stretch}
     .fhs-nav button{margin-top:24px}
     .fhs-wrap .fhs-back{flex:0 0 34%;background:#fff;color:var(--fhs-muted);border:1px solid #cbd5e1;font-size:17px}
@@ -2215,7 +2318,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-next-note{background:#eef6ff;border:1px solid #cfe3ff;border-radius:10px;padding:14px 16px;font-size:15px;color:#1c3d5a;margin-top:16px;line-height:1.8}
 
     /* デザイン: compact（横幅はPHP側でインラインに出すので、ここでは指定しない） */
-    .fhs-design-compact .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:14px;padding:20px 18px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
+    .fhs-design-compact .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:10px;padding:20px 18px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
     .fhs-design-compact label{font-size:16px;margin:12px 0 5px}
     .fhs-design-compact input,.fhs-design-compact select,.fhs-design-compact textarea{padding:11px 12px;font-size:16px}
     .fhs-design-compact button{margin-top:16px;padding:14px;font-size:17px}
@@ -2238,11 +2341,11 @@ function eaf_shortcode($atts = array()) {
     }
 
     /* デザイン: card */
-    .fhs-design-card .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:14px;padding:24px 22px;box-shadow:0 4px 18px rgba(16,24,40,.06)}
+    .fhs-design-card .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:10px;padding:24px 22px;box-shadow:0 4px 18px rgba(16,24,40,.06)}
 <?php // ここから下はティザー用。以降のスタイルも含めて、このブロックはページに1回だけ出力される ?>
 
     /* ============ ティザー（記事内などに置く入口フォーム） ============ */
-    .fhs-design-teaser .fhs-card,.fhs-design-teaser-v .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:14px;padding:22px 22px 24px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
+    .fhs-design-teaser .fhs-card,.fhs-design-teaser-v .fhs-card{background:#fff;border:1px solid var(--fhs-line);border-radius:10px;padding:22px 22px 24px;box-shadow:0 8px 28px rgba(16,24,40,.10)}
     /* 記事の中に置くので中央寄せ。★幅(max-width)はラッパのインラインstyleで個別に指定する。
        ここに書くと、同じページに横長と縦を両方置いたとき、後から出力されたCSSが
        両方に効いてしまい、片方の幅が意図せず変わる。 */
@@ -2287,7 +2390,7 @@ function eaf_shortcode($atts = array()) {
     .fhs-wrap .fhs-tile{
       display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;
       background:var(--t-bg,#F4F2EE);color:var(--t-fg,#5A5347);
-      border:2px solid transparent;border-radius:18px;padding:14px 8px 12px;margin:0;cursor:pointer;
+      border:2px solid transparent;border-radius:10px;padding:14px 8px 12px;margin:0;cursor:pointer;
       font-weight:700;font-size:13.5px;line-height:1.35;
       box-shadow:inset 0 -3px 0 rgba(0,0,0,.07);
       transition:transform .12s,box-shadow .15s,border-color .15s
@@ -2297,23 +2400,18 @@ function eaf_shortcode($atts = array()) {
     .fhs-tile-n{display:block;font-weight:500;font-size:11px;opacity:.8;line-height:1.5}
     .fhs-wrap .fhs-tile:hover{transform:translateY(-2px);box-shadow:inset 0 -3px 0 rgba(0,0,0,.07),0 7px 15px rgba(40,45,60,.14)}
     .fhs-wrap .fhs-tile:active{transform:translateY(0)}
-    .fhs-wrap .fhs-tile-input:checked + .fhs-tile{border-color:currentColor;box-shadow:inset 0 -3px 0 rgba(0,0,0,.07),0 7px 15px rgba(40,45,60,.18)}
+    .fhs-wrap .fhs-tile-input:checked + .fhs-tile{
+      background:var(--t-sel-bg,var(--t-bg));color:var(--t-sel-fg,var(--t-fg));
+      border-color:var(--t-sel-bd,currentColor);
+      box-shadow:inset 0 -3px 0 rgba(0,0,0,.07),0 7px 15px rgba(40,45,60,.18)
+    }
     .fhs-wrap .fhs-tile-input:focus-visible + .fhs-tile{box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.3)}
-    /* ★内容ごとに色を変える。9枚を同じ色で並べると見分けがつかず、探す時間が延びる */
-    .fhs-tile-aircon  {--t-bg:#EAF4FF;--t-fg:#2F6BA8}
-    .fhs-tile-breaker {--t-bg:#FFF2DE;--t-fg:#A9660B}
-    .fhs-tile-intercom{--t-bg:#EDF7EE;--t-fg:#3F7A4B}
-    .fhs-tile-outlet  {--t-bg:#FCEDF1;--t-fg:#A6486A}
-    .fhs-tile-light   {--t-bg:#F3EFFC;--t-fg:#6A56A8}
-    .fhs-tile-fan     {--t-bg:#EAF6F6;--t-fg:#2F7E7E}
-    .fhs-tile-wiring  {--t-bg:#FDF1E6;--t-fg:#A85F2B}
-    .fhs-tile-business{--t-bg:#EFF1F6;--t-fg:#4C5878}
-    .fhs-tile-other   {--t-bg:#F5F3EF;--t-fg:#6B6155}
+<?php echo eaf_tile_palette_css(); ?>
     /* ティザーは記事の途中に置く小さな入口なので、タイルも一回り小さくする */
     /* ★列数は本体と同じ3列を継ぐ。ここで auto-fit に戻すと、記事の幅が広いページで
        5枚＋4枚のように割れて、9枚が一覧に見えなくなる。 */
     .fhs-design-teaser .fhs-tiles,.fhs-design-teaser-v .fhs-tiles{gap:7px}
-    .fhs-design-teaser .fhs-tile,.fhs-design-teaser-v .fhs-tile{padding:9px 6px;font-size:12px;border-radius:14px;gap:3px}
+    .fhs-design-teaser .fhs-tile,.fhs-design-teaser-v .fhs-tile{padding:9px 6px;font-size:12px;border-radius:8px;gap:3px}
     .fhs-wrap.fhs-design-teaser .fhs-tile-ico,.fhs-wrap.fhs-design-teaser-v .fhs-tile-ico{width:20px;height:20px}
     /* ===== 横長：入力欄を横一列に並べる =====
        ★ビューポート幅のメディアクエリではなく flex-wrap で折り返す。
@@ -2469,7 +2567,9 @@ function eaf_shortcode($atts = array()) {
         <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
 <?php endforeach; ?>
       </select>
-      <div class="fhs-hint">番地までは不要です。詳しい場所は折り返しの際にうかがいます</div>
+<?php $city_hint = eaf_opt('city_hint', ''); if ($city_hint !== ''): ?>
+      <div class="fhs-hint"><?php echo esc_html($city_hint); ?></div>
+<?php endif; ?>
 <?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>
 <?php if ($situ_fields): ?>
       <div class="fhs-group">

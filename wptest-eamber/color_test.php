@@ -19,13 +19,13 @@ function t($n, $g, $w) {
 
 /* --- 1. 保存まわり（CSSを見ない検査を先に済ませる） --- */
 update_option(EAF_OPT, eaf_sanitize_options(array('color_brand' => '#e91e63')));
-t('6桁を保存', eaf_opt('color_brand', '#1f6feb'), '#e91e63');
+t('6桁を保存', eaf_opt('color_brand', 'FALLBACK'), '#e91e63');
 update_option(EAF_OPT, eaf_sanitize_options(array('color_brand' => '#abc')));
-t('3桁を保存', eaf_opt('color_brand', '#1f6feb'), '#abc');
+t('3桁を保存', eaf_opt('color_brand', 'FALLBACK'), '#abc');
 t('3桁でもrgbに変換できる', eaf_hex_to_rgb('#abc'), '170,187,204');
 foreach (array('あか', '', '<script>alert(1)</script>') as $bad) {
     update_option(EAF_OPT, eaf_sanitize_options(array('color_brand' => $bad)));
-    t('不正な値は初期値に: ' . ($bad === '' ? '(空欄)' : mb_substr($bad, 0, 10)), eaf_opt('color_brand', '#1f6feb'), '#1f6feb');
+    t('不正な値は既定に戻る: ' . ($bad === '' ? '(空欄)' : mb_substr($bad, 0, 10)), eaf_opt('color_brand', 'FALLBACK'), '#1E3050');
 }
 
 /* --- 2. ボタンの背景色は「空欄ならブランドカラー」 --- */
@@ -41,10 +41,17 @@ $lum = function ($hex) {
     }
     return 0.2126 * $ch[0] + 0.7152 * $ch[1] + 0.0722 * $ch[2];
 };
-$contrast = round((1.05) / ($lum('#e65100') + 0.05), 2);
-t('既定色に白文字のコントラストが3.5以上', $contrast >= 3.5, true);
-printf("     （実測 %.2f : 1）
-", $contrast);
+/* ★既定はアンバーのボタンに紺文字。白文字だと 2.4:1 しかなく沈むので、
+     この組み合わせのコントラストを検査で固定しておく。 */
+$ratio = function ($a, $b) use ($lum) {
+    $x = $lum($a); $y = $lum($b);
+    if ($x < $y) { $t = $x; $x = $y; $y = $t; }
+    return round(($x + 0.05) / ($y + 0.05), 2);
+};
+$contrast = $ratio('#E8A33D', '#1E3050');
+t('既定のボタン（アンバー地に紺文字）が4.5以上', $contrast >= 4.5, true);
+$white = $ratio('#E8A33D', '#ffffff');
+t('参考: 同じ地に白文字だと3未満', $white < 3.0, true);
 update_option(EAF_OPT, eaf_sanitize_options(array('color_brand' => '#1f2e43', 'color_btn_bg' => 'あか')));
 t('不正値も保存されない', eaf_opt('color_btn_bg', 'EMPTY'), 'EMPTY');
 update_option(EAF_OPT, eaf_sanitize_options(array('color_brand' => '#1f2e43', 'color_btn_bg' => '#ff8a00')));
@@ -54,9 +61,9 @@ t('指定すれば保存される', eaf_opt('color_btn_bg', 'EMPTY'), '#ff8a00')
 update_option(EAF_OPT, eaf_sanitize_options(array(
     'color_brand' => '#1f2e43', 'color_btn_bg' => '#ff8a00', 'color_badge' => '#00a86b',
 )));
-$field = eaf_color_field('color_badge', '#ff5a36');
+$field = eaf_color_field('color_badge', '#E8A33D');
 t('テキスト欄に現在値が入る', strpos($field, 'value="#00a86b"') !== false, true);
-t('初期値ボタンに既定色',     strpos($field, 'data-default="#ff5a36"') !== false, true);
+t('初期値ボタンに既定色',     strpos($field, 'data-default="#E8A33D"') !== false, true);
 
 /* --- 4. CSSへの反映（★ここが最初の eaf_shortcode 呼び出し） --- */
 $css = eaf_shortcode(array());

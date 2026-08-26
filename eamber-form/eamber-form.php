@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.0.5
+ * Version: 1.1.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.0.5');
+define('EAF_VER', '1.1.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -582,6 +582,8 @@ function eaf_sanitize_options($in) {
         'teaser_tags'      => sanitize_text_field($in['teaser_tags'] ?? ''),
         'form_page_id'    => (int) ($in['form_page_id'] ?? 0),
         'form_width'       => sanitize_text_field($in['form_width'] ?? ''),
+        'auto_teaser'      => !empty($in['auto_teaser']) ? '1' : '0',
+        'auto_teaser_design' => ((($in['auto_teaser_design'] ?? '') === 'teaser-v') ? 'teaser-v' : 'teaser'),
         // 自動返信メール
         'mail_subject'     => sanitize_text_field($in['mail_subject'] ?? ''),
         'mail_body'        => sanitize_textarea_field($in['mail_body'] ?? ''),
@@ -1143,6 +1145,20 @@ function eaf_settings_page() {
                         <strong><code>[eamber_form]</code> を貼ったお問い合わせページ</strong>を選びます。ティザーの「送信」で移動する先です。<br>
                         ここを設定しておけば、ティザーのショートコードに <code>url="…"</code> を書かなくて済みます。<br>
                         <span class="description">※ プラグインを有効化したとき、スラッグ <code>form</code> の固定ページを<strong>下書きで自動作成</strong>しています（同じスラッグのページが既にある場合はそれを使います）。</span>
+                    </p>
+                </td></tr>
+                <tr><th>記事末への自動挿入</th><td>
+                    <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[auto_teaser]" value="1" <?php checked(eaf_flag('auto_teaser', false)); ?>> 投稿（記事）の本文の最後に、入口フォームを自動で表示する</label>
+                    <p style="margin:10px 0 0">
+                        <select name="<?php echo EAF_OPT; ?>[auto_teaser_design]">
+                            <option value="teaser"<?php selected(eaf_opt('auto_teaser_design', 'teaser'), 'teaser'); ?>>横長（入力欄が横一列に並ぶ）</option>
+                            <option value="teaser-v"<?php selected(eaf_opt('auto_teaser_design', 'teaser'), 'teaser-v'); ?>>縦（幅440px）</option>
+                        </select>
+                    </p>
+                    <p class="description">
+                        記事を1本ずつ編集しなくても、全記事の本文末に入口フォームが出ます。<br>
+                        <strong>すでに本文へフォームを貼ってある記事には足しません</strong>（同じものが2つ並ばないようにするため）。固定ページには出ません。<br>
+                        <strong>上の「お問い合わせページ」が未設定のあいだは、オンにしても表示しません。</strong>遷移先の無いフォームは、読者にとって行き止まりになるためです。
                     </p>
                 </td></tr>
                 <tr><th>プライバシーポリシーURL</th><td><input type="url" name="<?php echo EAF_OPT; ?>[privacy_url]" value="<?php echo esc_attr(eaf_opt('privacy_url')); ?>" size="50"></td></tr>
@@ -1903,6 +1919,34 @@ function eaf_ajax() {
         'ptype_label' => $label, 'address' => $address,
         'confirm_text' => implode("\n", $confirm_lines),
     ));
+}
+
+/* =========================================================================
+ * 10b. 記事末への自動挿入
+ *
+ * 記事を1本ずつ開いてショートコードを貼る運用は、本数が増えるほど破綻する。
+ * 本文の最後に入口フォーム（ティザー）を自動で足す。
+ * ★既定はオフ。オンにした瞬間に全記事の見た目が変わるので、
+ *   気づかないうちに出ている状態は作らない。
+ * ======================================================================= */
+add_filter('the_content', 'eaf_append_teaser', 20);
+function eaf_append_teaser($content) {
+    if (!eaf_flag('auto_teaser', false)) return $content;
+    if (is_admin() || is_feed()) return $content;
+    /* the_content は一覧・抜粋・関連記事のループでも回る。
+       ここを絞らないと、記事一覧のカード1枚ごとにフォームが並ぶ。 */
+    if (!is_singular('post') || !in_the_loop() || !is_main_query()) return $content;
+    /* すでに本文へ貼ってある記事には足さない（同じフォームが2つ出る）。
+       ショートコードは優先度11で展開済みなので、展開後・展開前の両方を見る。 */
+    if (strpos($content, 'fhs-wrap') !== false)     return $content;
+    if (strpos($content, '[eamber_form') !== false) return $content;
+    /* ★遷移先が決まっていなければ出さない。
+       ティザーは押すと本フォームへ移るだけの入口なので、
+       行き先が無いまま出すと読者を行き止まりに連れて行くことになる。 */
+    if (eaf_form_url() === '') return $content;
+
+    $design = (eaf_opt('auto_teaser_design', 'teaser') === 'teaser-v') ? 'teaser-v' : 'teaser';
+    return $content . do_shortcode('[eamber_form design="' . $design . '"]');
 }
 
 /* =========================================================================

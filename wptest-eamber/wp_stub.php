@@ -86,6 +86,28 @@ function apply_filters($tag, $value) {
     foreach ($GLOBALS['FAKE_HOOKS'][$tag] as $cb) $value = call_user_func($cb, $value);
     return $value;
 }
+/* ---------------- 本文フィルタまわり（記事末の自動挿入の検査用） ----------------
+   既定は「単体記事の本文ループの中」。一覧・抜粋・フィードを再現したいときだけ
+   $GLOBALS['FAKE_*'] を立てる。 */
+function is_singular($type = '') {
+    $cur = isset($GLOBALS['FAKE_SINGULAR']) ? $GLOBALS['FAKE_SINGULAR'] : 'post';
+    if ($cur === '') return false;
+    return ($type === '') ? true : ($cur === $type);
+}
+function in_the_loop()   { return !isset($GLOBALS['FAKE_IN_LOOP'])    || $GLOBALS['FAKE_IN_LOOP']; }
+function is_main_query() { return !isset($GLOBALS['FAKE_MAIN_QUERY']) || $GLOBALS['FAKE_MAIN_QUERY']; }
+function is_feed()       { return !empty($GLOBALS['FAKE_IS_FEED']); }
+function do_shortcode($text) {
+    return preg_replace_callback('/\[(\w+)([^\]]*)\]/', function ($m) {
+        if (empty($GLOBALS['FAKE_SHORTCODES'][$m[1]])) return $m[0];
+        $atts = array();
+        if (preg_match_all('/(\w+)="([^"]*)"/', $m[2], $mm, PREG_SET_ORDER)) {
+            foreach ($mm as $one) $atts[$one[1]] = $one[2];
+        }
+        return call_user_func($GLOBALS['FAKE_SHORTCODES'][$m[1]], $atts);
+    }, $text);
+}
+
 function register_activation_hook($file, $cb) { $GLOBALS['FAKE_ACTIVATE'][] = $cb; }
 function add_shortcode($tag, $cb) { $GLOBALS['FAKE_SHORTCODES'][$tag] = $cb; }
 function do_shortcode_call($tag, $atts = array()) { return call_user_func($GLOBALS['FAKE_SHORTCODES'][$tag], $atts); }

@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.0.5\n・フォームの横幅を指定できるようにしました（設定→デザイン→フォームの横幅）。既定は680pxで中央寄せです\n・ショートコードの width をすべてのデザインで使えるように。例: [eamber_form width=\"820\"]"
+    "changelog": "1.1.0\n・記事の本文末に入口フォームを自動で表示できるようにしました（設定→基本設定→記事末への自動挿入）。記事を1本ずつ編集する必要はありません\n・固定ページ・記事一覧・フィード、すでにフォームを貼ってある記事には出ません\n・お問い合わせページが未設定のあいだは、オンにしても表示しません"
   }
 }

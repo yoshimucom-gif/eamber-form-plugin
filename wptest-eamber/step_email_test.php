@@ -3,7 +3,7 @@
  * 2ステップ構成とメール任意の検査（2026-08-25 吉村さん指示の作り直し分）。
  *
  * ・ステップは「お困りの内容（概要）→ ご連絡先（個人情報）」の2つだけ
- * ・ご状況の項目は1画面目に同居し、既定で出すのは建物・時期・自由記述だけ
+ * ・既定で出るのは必須項目だけ（ご状況の任意項目はすべて非表示）
  * ・メールアドレスは任意。未入力でも受け付け、受付完了メールは送らない
  *   （入力があれば形式を検証し、受付完了メールを送る）
  */
@@ -52,7 +52,6 @@ $expected = array(
     'fan__fn_place',
     'intercom__ic_symptom',
     'light__lt_work',
-    'marketing',          // 営業メール希望のチェック（任意）
     'other__ot_note',
     'outlet__ol_work',
     'ptype',              // 工事内容（必須・タイル）
@@ -85,15 +84,19 @@ t('「その他」の自由記述は必須', $ot_def, 'req');
 $o = get_option(EAF_OPT, array());
 $o['mode_situation_building'] = 'req';        // 旧版で保存された状態を再現
 $o['mode_customer_contact_time'] = 'opt';
-$o['show_note'] = '1';                        // 備考欄はモードではなく別フラグで出る
+$o['show_note'] = '1';                        // 廃止済みの設定（掃除の対象）
+$o['show_marketing'] = '1';                   // 営業案内チェックは別フラグで出る
+$o['spam_block_link'] = '1';                  // URLブロックも別フラグ
 $o['site_name'] = '不動産査定';                // フォーク元の既定が保存されたまま
 update_option(EAF_OPT, $o);
 delete_option('eaf_field_defaults_ver');       // 未移行の環境を再現
 t('移行前は保存値が効いている', eaf_mode('situation', 'building', 'off'), 'req');
-t('移行前は備考欄が出てしまう',   eaf_flag('show_note', false), true);
+t('移行前は営業案内チェックが出てしまう', eaf_flag('show_marketing', false), true);
+t('移行前はURLブロックが効いてしまう',   eaf_flag('spam_block_link', false), true);
 eaf_maybe_reset_field_modes();
 t('移行で保存値が捨てられ既定に戻る', eaf_mode('situation', 'building', 'off'), 'off');
-t('備考欄も既定（非表示）に戻る',     eaf_flag('show_note', false), false);
+t('営業案内チェックも既定（非表示）に戻る', eaf_flag('show_marketing', false), false);
+t('URLブロックも既定（オフ）に戻る',       eaf_flag('spam_block_link', false), false);
 t('フォーク元の社名も捨てる',         eaf_opt('site_name', '株式会社e.Amber'), '株式会社e.Amber');
 t('移行は版を記録して二度実行しない', get_option('eaf_field_defaults_ver'), EAF_FIELD_DEFAULTS_VER);
 /* ★捨てるのは「フォーク元の既定そのもの」だけ。手で入れた社名まで消してはいけない */

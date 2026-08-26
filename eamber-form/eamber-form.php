@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.1.0');
+define('EAF_VER', '1.2.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -406,7 +406,7 @@ function eaf_form_url() {
  *   「コードの既定を変えたのに、保存済みの環境では何も変わらない」状態になる。
  *   ここを上げた更新では、保存済みのモードを一度だけ捨てて既定に戻す。
  */
-define('EAF_FIELD_DEFAULTS_VER', '3');   // 3 = 表示の切替（備考欄）とフォーク元の名残も戻す
+define('EAF_FIELD_DEFAULTS_VER', '4');   // 4 = 営業案内チェックも既定オフへ
 
 function eaf_maybe_reset_field_modes() {
     if (get_option('eaf_field_defaults_ver') === EAF_FIELD_DEFAULTS_VER) return;
@@ -416,8 +416,11 @@ function eaf_maybe_reset_field_modes() {
             if (strpos($k, 'mode_') === 0) unset($o[$k]);
         }
         /* ★モード以外の「表示する項目」も同じ理由で戻す。
-           mode_ だけ消しても、備考欄のように別フラグで出ている欄は残ってしまう。 */
+           mode_ だけ消しても、別フラグで出ている欄の保存値は残る。
+           ★廃止した設定も掃除する（次に同じ名前を使ったとき古い値が効くため）。 */
         unset($o['show_note']);
+        unset($o['show_marketing']);
+        unset($o['spam_block_link']);
         /* フォーク元（不動産の査定フォーム）の既定が保存されたままの環境があるため、
            その値そのものだったときだけ捨てる。手で入れた社名は壊さない。 */
         if (isset($o['site_name']) && $o['site_name'] === '不動産査定') unset($o['site_name']);
@@ -560,17 +563,17 @@ function eaf_sanitize_options($in) {
     $out = array(
         'site_name'        => sanitize_text_field($in['site_name'] ?? '株式会社e.Amber'),
         'operator_contact' => sanitize_text_field($in['operator_contact'] ?? ''),
+        'tel_message'      => sanitize_text_field($in['tel_message'] ?? ''),
+        'tel_submessage'   => sanitize_text_field($in['tel_submessage'] ?? ''),
         'operator_address' => sanitize_text_field($in['operator_address'] ?? ''),
         'operator_email'   => sanitize_email($in['operator_email'] ?? ''),
         'from_email'       => sanitize_email($in['from_email'] ?? ''),
         'notify_email'     => sanitize_email($in['notify_email'] ?? ''),
         'privacy_url'      => esc_url_raw($in['privacy_url'] ?? ''),
-        'terms_url'        => esc_url_raw($in['terms_url'] ?? ''),
         // チェックボックス（未送信＝OFF。'' ではなく明示的に '0' を入れて区別する）
         'notify_on'        => !empty($in['notify_on'])      ? '1' : '0',
         // フォーム上に問い合わせ先（電話番号）を出すか。既定はOFF
         'show_marketing'   => !empty($in['show_marketing']) ? '1' : '0',
-        'show_note'        => !empty($in['show_note'])      ? '1' : '0',
         'step_form'        => !empty($in['step_form'])      ? '1' : '0',
         // スパム対策
         'spam_block_link'  => !empty($in['spam_block_link'])  ? '1' : '0',
@@ -582,8 +585,6 @@ function eaf_sanitize_options($in) {
         'teaser_tags'      => sanitize_text_field($in['teaser_tags'] ?? ''),
         'form_page_id'    => (int) ($in['form_page_id'] ?? 0),
         'form_width'       => sanitize_text_field($in['form_width'] ?? ''),
-        'auto_teaser'      => !empty($in['auto_teaser']) ? '1' : '0',
-        'auto_teaser_design' => ((($in['auto_teaser_design'] ?? '') === 'teaser-v') ? 'teaser-v' : 'teaser'),
         // 自動返信メール
         'mail_subject'     => sanitize_text_field($in['mail_subject'] ?? ''),
         'mail_body'        => sanitize_textarea_field($in['mail_body'] ?? ''),
@@ -791,7 +792,7 @@ function eaf_bot_errors() {
  * ★お客様を取りこぼす損失の方が大きいので、誤判定の起きにくいものだけを既定で有効にする。
  */
 function eaf_spam_hit($values) {
-    $block_link = eaf_flag('spam_block_link', true);
+    $block_link = eaf_flag('spam_block_link', false);
     $words = array_values(array_filter(array_map('trim', preg_split('/\R/', (string) eaf_opt('spam_words', ''))), 'strlen'));
 
     foreach ($values as $v) {
@@ -938,10 +939,14 @@ function eaf_admin_notify_body($ctx) {
     if (!empty($ctx['customer_details'])) $b .= $ctx['customer_details'] . "\n";
     $b .= "\n───── 工事内容・ご状況 ─────\n";
     $b .= (isset($ctx['property_details']) ? $ctx['property_details'] : '') . "\n";
-    $b .= "\n───── 営業連絡について ─────\n";
-    $b .= !empty($ctx['marketing'])
-        ? "○ 営業案内メールの受け取りに同意いただいています。\n"
-        : "× 営業案内メールの受け取りには同意されていません。\n  今回のお申し込みへのご対応以外の営業メールは送らないでください（特定電子メール法）。\n";
+    /* ★チェック欄を出していないなら、この節は書かない。
+       求めてもいない同意の可否を毎回伝えても、担当者には読む行が増えるだけ。 */
+    if (eaf_flag('show_marketing', false)) {
+        $b .= "\n───── 営業連絡について ─────\n";
+        $b .= !empty($ctx['marketing'])
+            ? "○ 営業案内メールの受け取りに同意いただいています。\n"
+            : "× 営業案内メールの受け取りには同意されていません。\n  今回のお申し込みへのご対応以外の営業メールは送らないでください（特定電子メール法）。\n";
+    }
     $b .= "\n管理画面「電気工事反響フォーム → 反響一覧」からも確認できます。";
     return $b;
 }
@@ -1077,7 +1082,7 @@ function eaf_settings_page() {
         }
         ?>
         <p style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-            <span>ページに <code>[eamber_form]</code> を貼ると申込フォームが表示されます。詳しい書き方は「<strong>使い方</strong>」タブへ。</span>
+            <span>ページに <code>[eamber_form]</code> を貼ると申込フォームが表示されます。詳しい書き方は「<strong>ショートコード</strong>」タブへ。</span>
         </p>
         <p style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-6px 0 14px">
             <span class="description">バージョン <strong><?php echo esc_html(EAF_VER); ?></strong><?php
@@ -1094,7 +1099,7 @@ function eaf_settings_page() {
             <a href="#" class="nav-tab" data-tab="fields">入力項目</a>
             <a href="#" class="nav-tab" data-tab="mail">自動返信メール</a>
             <a href="#" class="nav-tab" data-tab="style">デザイン</a>
-            <a href="#" class="nav-tab" data-tab="usage">使い方</a>
+            <a href="#" class="nav-tab" data-tab="usage">ショートコード</a>
         </h2>
         <form method="post" action="options.php">
             <?php settings_fields('eaf_group'); ?>
@@ -1105,7 +1110,14 @@ function eaf_settings_page() {
                     <p class="description">メールの件名・本文の署名、フォームの利用目的の主語に使われます。運営と施工が同じ会社なので、会社名はこの1箇所だけです。</p></td></tr>
                 <tr><th>電話番号（お客様向け）</th><td>
                     <input type="text" name="<?php echo EAF_OPT; ?>[operator_contact]" value="<?php echo esc_attr(eaf_opt('operator_contact')); ?>" size="40" placeholder="例：055-000-0000">
-                    <p class="description"><strong>フォームの冒頭</strong>（お急ぎの方はお電話ください）と<strong>受付完了メールの末尾</strong>に表示されます。工事の問い合わせは急ぎが多く、電話が最短の導線です。</p></td></tr>
+                    <p class="description"><strong>フォームの冒頭</strong>と<strong>受付完了メールの末尾</strong>に表示されます。工事の問い合わせは急ぎが多く、電話が最短の導線です。<br>
+                    <span class="description">※ハイフンありで入れると読みやすくなります（例：<code>090-3451-6042</code>）。表示は入力したとおりに出ます。</span></p></td></tr>
+                <tr><th>電話案内のメッセージ</th><td>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[tel_message]" value="<?php echo esc_attr(eaf_opt('tel_message')); ?>" size="50" placeholder="お急ぎの方はお電話ください。">
+                    <p class="description">電話番号の上に出る一行。空欄なら「お急ぎの方はお電話ください。」と表示します。</p></td></tr>
+                <tr><th>電話案内のサブメッセージ</th><td>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[tel_submessage]" value="<?php echo esc_attr(eaf_opt('tel_submessage')); ?>" size="50" placeholder="例：受付 9:00〜18:00（日曜・祝日を除く）">
+                    <p class="description">電話番号の下に小さく出る一行。<strong>空欄なら何も表示しません。</strong>受付時間や「相談だけでも構いません」など、電話をかける前の不安を消す一言に向いています。</p></td></tr>
                 <tr><th>問い合わせメール</th><td>
                     <input type="email" name="<?php echo EAF_OPT; ?>[operator_email]" value="<?php echo esc_attr(eaf_opt('operator_email')); ?>" size="40" placeholder="info@example.com">
                     <p class="description">受付完了メールの末尾に載る、お客様からの問い合わせ先です。通知を受け取る「通知先メール（担当者）」とは別に指定できます。</p></td></tr>
@@ -1147,22 +1159,7 @@ function eaf_settings_page() {
                         <span class="description">※ プラグインを有効化したとき、スラッグ <code>form</code> の固定ページを<strong>下書きで自動作成</strong>しています（同じスラッグのページが既にある場合はそれを使います）。</span>
                     </p>
                 </td></tr>
-                <tr><th>記事末への自動挿入</th><td>
-                    <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[auto_teaser]" value="1" <?php checked(eaf_flag('auto_teaser', false)); ?>> 投稿（記事）の本文の最後に、入口フォームを自動で表示する</label>
-                    <p style="margin:10px 0 0">
-                        <select name="<?php echo EAF_OPT; ?>[auto_teaser_design]">
-                            <option value="teaser"<?php selected(eaf_opt('auto_teaser_design', 'teaser'), 'teaser'); ?>>横長（入力欄が横一列に並ぶ）</option>
-                            <option value="teaser-v"<?php selected(eaf_opt('auto_teaser_design', 'teaser'), 'teaser-v'); ?>>縦（幅440px）</option>
-                        </select>
-                    </p>
-                    <p class="description">
-                        記事を1本ずつ編集しなくても、全記事の本文末に入口フォームが出ます。<br>
-                        <strong>すでに本文へフォームを貼ってある記事には足しません</strong>（同じものが2つ並ばないようにするため）。固定ページには出ません。<br>
-                        <strong>上の「お問い合わせページ」が未設定のあいだは、オンにしても表示しません。</strong>遷移先の無いフォームは、読者にとって行き止まりになるためです。
-                    </p>
-                </td></tr>
                 <tr><th>プライバシーポリシーURL</th><td><input type="url" name="<?php echo EAF_OPT; ?>[privacy_url]" value="<?php echo esc_attr(eaf_opt('privacy_url')); ?>" size="50"></td></tr>
-                <tr><th>利用規約・免責URL</th><td><input type="url" name="<?php echo EAF_OPT; ?>[terms_url]" value="<?php echo esc_attr(eaf_opt('terms_url')); ?>" size="50"></td></tr>
             </table>
             </div>
             <div class="fhs-tabpanel" data-tab="fields" style="display:none">
@@ -1214,10 +1211,10 @@ function eaf_settings_page() {
             </p>
             <table class="form-table">
                 <tr><th>リンクを含む申し込み</th><td>
-                    <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[spam_block_link]" value="1" <?php checked(eaf_flag('spam_block_link', true)); ?>> URL（http://… など）が入力されていたら受け付けない</label>
+                    <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[spam_block_link]" value="1" <?php checked(eaf_flag('spam_block_link', false)); ?>> URL（http://… など）が入力されていたら受け付けない</label>
                     <p class="description">
-                        工事の問い合わせでURLを書く理由はまずないので、<strong>オンのままを推奨します。</strong>
-                        宣伝リンクを貼る典型的なスパムを止められます。<br>
+                        <strong>既定はオフです。</strong>店舗や事務所のお客様が自社サイトのURLを書いて送ってくることがあり、
+                        オンにするとそれを黙って弾いてしまうためです。スパムが実際に増えたらオンにしてください。<br>
                         ※あわせて、キリル文字・アラビア文字・タイ文字が含まれる申し込みは常に受け付けません（設定不要）。
                     </p>
                 </td></tr>
@@ -1250,9 +1247,11 @@ function eaf_settings_page() {
 
             <h4 style="margin:26px 0 6px">そのほかの欄</h4>
             <table class="form-table"><tr><th>表示する項目</th><td>
-                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_note]" value="1" <?php checked(eaf_flag('show_note', false)); ?>> 「備考・ご要望」の自由入力欄（★「症状・ご希望」と重複するため既定はオフ）</label><br>
-                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_marketing]" value="1" <?php checked(eaf_flag('show_marketing', true)); ?>> 「営業案内メールを希望」チェック欄</label>
-                <p class="description">営業案内メールのチェックは<strong>同意の証拠</strong>になります（特定電子メール法）。オフにすると、今回の申し込み以外の営業メールは送れません。</p>
+                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_marketing]" value="1" <?php checked(eaf_flag('show_marketing', false)); ?>> 「営業案内メールを希望」チェック欄（★既定はオフ）</label>
+                <p class="description">
+                    営業案内メールを送る予定があるときだけオンにしてください。オンにすると、そのチェックが<strong>同意の証拠</strong>になります（特定電子メール法）。<br>
+                    <strong>オフのままなら、お客様に読ませる同意は「個人情報の取り扱い」の1つだけで済みます。</strong>送る予定のない同意を求めても、読む項目が増えるだけです。
+                </p>
             </td></tr></table>
             </div>
 
@@ -1573,7 +1572,7 @@ function eaf_settings_page() {
         function showTab(name){
             tabs.forEach(function(x){ x.classList.toggle('nav-tab-active', x.getAttribute('data-tab') === name); });
             panels.forEach(function(p){ p.style.display = (p.getAttribute('data-tab') === name) ? '' : 'none'; });
-            if (save) save.style.display = (name === 'usage') ? 'none' : ''; // 使い方タブでは保存ボタンを隠す
+            if (save) save.style.display = (name === 'usage') ? 'none' : ''; // ショートコードタブは読むだけなので保存ボタンを隠す
         }
         tabs.forEach(function(t){
             t.addEventListener('click', function(e){
@@ -1734,9 +1733,8 @@ function eaf_ajax() {
     // 防ぐため、生の入力が空かどうかを先に控えておき、形式エラーはエラーとして返す
     $email_raw = trim((string) wp_unslash($_POST['email'] ?? ''));
     $email     = sanitize_email($email_raw);
-    $note    = eaf_flag('show_note', false) ? sanitize_textarea_field($_POST['note_text'] ?? '') : '';
     $agree   = !empty($_POST['agree']);
-    $mkt     = eaf_flag('show_marketing', true) && !empty($_POST['marketing']);
+    $mkt     = eaf_flag('show_marketing', false) && !empty($_POST['marketing']);
 
     $errors = array();
     if (!$agree) $errors[] = '個人情報の取扱いへの同意が必要です。';
@@ -1805,7 +1803,7 @@ function eaf_ajax() {
 
     /* スパム判定。自由入力の欄をまとめて見る。
        ★理由は伝えない（どこで弾かれたかをボットに教えないため）。 */
-    $free_text = array($address, $note);
+    $free_text = array($address);
     foreach (array($cust, $situ, $prop_vals) as $set) {
         foreach ($set as $item) $free_text[] = $item['val'];
     }
@@ -1832,9 +1830,8 @@ function eaf_ajax() {
     $customer_details = implode("\n", $cust_lines);
     $prop_head = array('■ 工事内容 : ' . $label, '■ 現場の市町村 : ' . $address);
     $property_details = implode("\n", array_merge($prop_head, $situ_lines, $prop_lines));
-    if ($note !== '') $property_details .= "\n■ 備考・ご要望 : " . $note;
 
-    // 「詳細」列に入れるもの＝個別カラムを持たない項目 ＋ 工事内容ごとの項目 ＋ 備考
+    // 「詳細」列に入れるもの＝個別カラムを持たない項目 ＋ 工事内容ごとの項目
     $detail_lines = array();
     foreach (array($cust, $situ) as $set) {
         foreach ($set as $item) {
@@ -1844,11 +1841,9 @@ function eaf_ajax() {
         }
     }
     $detail_lines = array_merge($detail_lines, $prop_lines);
-    if ($note !== '') $detail_lines[] = '■ 備考・ご要望 : ' . $note;
 
     // 完了画面の「ご入力内容」用。お名前・電話・種別・住所は表で別に出すため、ここには入れない
     $confirm_lines = array_merge($situ_lines, $prop_lines);
-    if ($note !== '') $confirm_lines[] = '■ 備考・ご要望 : ' . $note;
 
     // リード保存
     global $wpdb;
@@ -1919,34 +1914,6 @@ function eaf_ajax() {
         'ptype_label' => $label, 'address' => $address,
         'confirm_text' => implode("\n", $confirm_lines),
     ));
-}
-
-/* =========================================================================
- * 10b. 記事末への自動挿入
- *
- * 記事を1本ずつ開いてショートコードを貼る運用は、本数が増えるほど破綻する。
- * 本文の最後に入口フォーム（ティザー）を自動で足す。
- * ★既定はオフ。オンにした瞬間に全記事の見た目が変わるので、
- *   気づかないうちに出ている状態は作らない。
- * ======================================================================= */
-add_filter('the_content', 'eaf_append_teaser', 20);
-function eaf_append_teaser($content) {
-    if (!eaf_flag('auto_teaser', false)) return $content;
-    if (is_admin() || is_feed()) return $content;
-    /* the_content は一覧・抜粋・関連記事のループでも回る。
-       ここを絞らないと、記事一覧のカード1枚ごとにフォームが並ぶ。 */
-    if (!is_singular('post') || !in_the_loop() || !is_main_query()) return $content;
-    /* すでに本文へ貼ってある記事には足さない（同じフォームが2つ出る）。
-       ショートコードは優先度11で展開済みなので、展開後・展開前の両方を見る。 */
-    if (strpos($content, 'fhs-wrap') !== false)     return $content;
-    if (strpos($content, '[eamber_form') !== false) return $content;
-    /* ★遷移先が決まっていなければ出さない。
-       ティザーは押すと本フォームへ移るだけの入口なので、
-       行き先が無いまま出すと読者を行き止まりに連れて行くことになる。 */
-    if (eaf_form_url() === '') return $content;
-
-    $design = (eaf_opt('auto_teaser_design', 'teaser') === 'teaser-v') ? 'teaser-v' : 'teaser';
-    return $content . do_shortcode('[eamber_form design="' . $design . '"]');
 }
 
 /* =========================================================================
@@ -2039,7 +2006,6 @@ function eaf_shortcode($atts = array()) {
     $nonce   = wp_create_nonce('eamber_form');
     $ajax    = admin_url('admin-ajax.php');
     $privacy = eaf_opt('privacy_url');
-    $terms   = eaf_opt('terms_url');
     /* 1ページに複数置かれる前提。uniqid() は同一リクエスト内で同じ値を返すことがあるため、
        連番を足して確実に一意にする（idが重なると label が別のフォームの入力欄を指してしまう）。
        CSSとJSは何個あっても最初の1回だけ出す。 */
@@ -2051,8 +2017,7 @@ function eaf_shortcode($atts = array()) {
     // compact では必須項目だけに絞る（メインビジュアル横などに収めるため）
     $cust_fields = eaf_visible_fields('customer',  eaf_customer_fields(),  $compact);
     $situ_fields = eaf_visible_fields('situation', eaf_situation_fields(), $compact);
-    $show_note   = eaf_flag('show_note', false) && !$compact;
-    $show_mkt    = eaf_flag('show_marketing', true) && !$compact;
+    $show_mkt    = eaf_flag('show_marketing', false) && !$compact;
 
     /* ステップは2つだけ:「お困りの内容（概要）→ ご連絡先（個人情報）」。
        画面を増やすほど離脱するため、聞くことは1画面目にまとめ、個人情報は必ず最後に置く。
@@ -2067,13 +2032,15 @@ function eaf_shortcode($atts = array()) {
        （本気査定は「電話で済まされると申込が減る」ため伏せていたが、
         自社サイトの工事問い合わせでは電話も同じ受注。隠す理由がない）。 */
     $op_tel = eaf_opt('operator_contact', '');
+    $tel_msg = eaf_opt('tel_message', 'お急ぎの方はお電話ください。');
+    $tel_sub = eaf_opt('tel_submessage', '');
 
-    $agree_label = 'プライバシーポリシーおよび免責事項に同意します（必須）';
-    if ($privacy || $terms) {
-        $p = $privacy ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>' : 'プライバシーポリシー';
-        $t = $terms ? '<a href="' . esc_url($terms) . '" target="_blank" rel="noopener">免責事項</a>' : '免責事項';
-        $agree_label = $p . 'および' . $t . 'に同意します（必須）';
-    }
+    /* ★同意はプライバシーポリシーの1本だけ。
+       免責事項はフォーク元（価格を示す査定フォーム）で要ったもので、
+       このフォームは価格を一切示さない。存在しない文書への同意は求めない。 */
+    $agree_label = ($privacy
+        ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>'
+        : 'プライバシーポリシー') . 'に同意します（必須）';
 
     /**
      * 工事内容のタイル選択。
@@ -2190,8 +2157,12 @@ function eaf_shortcode($atts = array()) {
     .fhs-req.fhs-done{background:var(--fhs-brand);color:#fff;border-radius:50%;width:20px;height:20px;padding:0;font-size:12px;justify-content:center}
     .fhs-lead{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:10px;padding:14px 16px;font-size:16px;color:#374151;margin-bottom:20px;white-space:pre-line}
     /* フォーム冒頭の電話案内。急ぎの読者が最初に目にする位置に置く */
-    .fhs-telbar{background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:10px;padding:13px 16px;font-size:16px;font-weight:700;color:var(--fhs-ink);margin-bottom:16px;text-align:center}
-    .fhs-telbar a{color:var(--fhs-brand);font-size:19px;text-decoration:none;white-space:nowrap}
+    .fhs-telbar{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(var(--fhs-brand-rgb),.07);border:1px solid rgba(var(--fhs-brand-rgb),.22);border-radius:16px;padding:14px 16px;color:var(--fhs-ink);margin-bottom:18px;text-align:center}
+    .fhs-telbar-msg{font-size:15px;font-weight:700;line-height:1.6}
+    .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-brand);font-size:27px;font-weight:800;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
+    .fhs-wrap .fhs-telbar-num svg{width:22px;height:22px;flex:0 0 auto}
+    .fhs-telbar-sub{font-size:12.5px;font-weight:500;color:var(--fhs-muted);line-height:1.6}
+    @media(max-width:400px){.fhs-wrap .fhs-telbar-num{font-size:23px}}
     .fhs-section{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px;color:var(--fhs-ink);margin:34px 0 12px;line-height:1.45;letter-spacing:.01em}
     .fhs-section::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--fhs-brand);flex:0 0 auto}
     .fhs-form > .fhs-section:first-child{margin-top:0}
@@ -2435,13 +2406,17 @@ function eaf_shortcode($atts = array()) {
         <span><?php echo esc_html($ln); ?></span>
 <?php endforeach; ?>
       </div>
-      <?php /* ティザーには免責を置かない。ここでは価格を一切示さず、申し込みも受け付けない
-               （次のページへ移るだけ）ため。免責が要るのは価格を示す場面と申し込みを受け付ける場面で、
-               それは遷移先の本フォーム・完了画面・自動返信メールに必ず表示される。 */ ?>
-    </form>
+          </form>
 <?php else: /* ===== 通常のフォーム ===== */ ?>
 <?php if ($op_tel !== ''): ?>
-    <div class="fhs-telbar">お急ぎの方はお電話が早いです：<a href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>"><?php echo esc_html($op_tel); ?></a></div>
+    <div class="fhs-telbar">
+      <span class="fhs-telbar-msg"><?php echo esc_html($tel_msg); ?></span>
+      <a class="fhs-telbar-num" href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h3l1.5 4-2 1.4a11 11 0 0 0 5.1 5.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z"/></svg><?php echo esc_html($op_tel); ?></a>
+<?php if ($tel_sub !== ''): ?>
+      <span class="fhs-telbar-sub"><?php echo esc_html($tel_sub); ?></span>
+<?php endif; ?>
+    </div>
 <?php endif; ?>
 <?php $lead = eaf_opt('lead_text'); if ($lead !== ''): ?>
     <div class="fhs-lead"><?php echo esc_html($lead); ?></div>
@@ -2498,10 +2473,6 @@ function eaf_shortcode($atts = array()) {
       </div>
 <?php endif; ?>
 
-<?php if ($show_note): ?>
-      <label for="<?php echo esc_attr($uid . '-note'); ?>">備考・ご要望<span class="fhs-opt">任意</span></label>
-      <textarea name="note_text" id="<?php echo esc_attr($uid . '-note'); ?>" rows="2" placeholder="ご不明な点、ご希望などがあればご記入ください"></textarea>
-<?php endif; ?>
 <?php if ($stepped): ?></div><?php endif; /* step 1 ここまで */ ?>
 
 <?php if ($stepped): ?><div class="fhs-formstep" data-step="2" style="display:none"><?php endif; ?>

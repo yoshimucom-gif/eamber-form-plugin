@@ -103,7 +103,9 @@ t('通常の文字列はそのまま', eaf_csv_safe('山田太郎'), '山田太�
 
 /* --- 9. 保存カラムの定義がスキーマと一致しているか --- */
 $cols = eaf_lead_columns();
-t('保存カラム一覧', array_keys($cols), array('name','kana','tel','contact_time','building','ownership','timing','detail'));
+/* ★会社名は「工事内容ごとの項目」側にあるカラム。ここに出てこないと
+     ALTER が走らず、法人の反響が insert ごと失敗して1件も残らない。 */
+t('保存カラム一覧', array_keys($cols), array('name','kana','tel','contact_time','building','ownership','timing','detail','company'));
 
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 exit($ng ? 1 : 0);

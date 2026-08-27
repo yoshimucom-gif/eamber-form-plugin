@@ -111,7 +111,7 @@ preg_match('/sh\.appendRow\(\[\s*
 $head_n = preg_match_all("/'[^']*'/", $h[1]);          // 見出しの個数
 $val_n  = preg_match_all('/data\.[a-z_]+/', $v[1]);    // 書き込む値の個数
 t('見出しの数と値の数が合う', $head_n, $val_n);
-t('列は15', $head_n, 15);
+t('列は16', $head_n, 16);
 
 /* --- 8. 設定画面に連携タブがある --- */
 $GLOBALS['FAKE_IS_ADMIN'] = true;

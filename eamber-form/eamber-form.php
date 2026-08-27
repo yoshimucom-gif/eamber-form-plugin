@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.6.4
+ * Version: 1.7.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.6.4');
+define('EAF_VER', '1.7.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -112,9 +112,18 @@ function eaf_property_fields() {
             array('key'=>'wr_work',    'label'=>'ご希望の内容',        'type'=>'select', 'def'=>'req', 'opts'=>'wr_work'),
             array('key'=>'wr_year',    'label'=>'建物の築年（西暦）',   'type'=>'number', 'def'=>'off', 'ph'=>'例：1995'),
         ),
+        /* ★法人だけは、タイルの次にもう一段のカード選択に入る。
+           個人向けの8枚とちがって「店舗・事務所・工場」の中身は幅が広く、
+           業務用エアコンとキュービクル更新では折り返しの担当も段取りも別物になる。
+           個人の枝はここを通らないので、8枚を選んだ人の手数は増えない。 */
         'business' => array(
-            array('key'=>'bz_kind',    'label'=>'建物の用途',          'type'=>'select', 'def'=>'req', 'opts'=>'bz_kind'),
-            array('key'=>'bz_work',    'label'=>'ご検討の工事',        'type'=>'select', 'def'=>'off', 'opts'=>'bz_work'),
+            array('key'=>'bz_work',    'label'=>'ご検討の工事',        'type'=>'cards',  'def'=>'req', 'opts'=>'bz_work'),
+            /* 法人は折り返し先が会社なので、社名が無いと誰からの相談か分からない。
+               個人の枝にはこの欄を出さない（法人・その他の枝だけが持つ）。 */
+            array('key'=>'company',    'label'=>'会社名・屋号',        'type'=>'text',   'col'=>'company', 'len'=>150, 'def'=>'req', 'ph'=>'例：株式会社◯◯'),
+            /* 用途は既定で出さない。工事の内容と社名が分かれば、店舗か事務所かは
+               折り返しの電話で聞ける。法人の枝を2問に保つほうが取りこぼしが少ない。 */
+            array('key'=>'bz_kind',    'label'=>'建物の用途',          'type'=>'select', 'def'=>'off', 'opts'=>'bz_kind'),
             array('key'=>'bz_stop',    'label'=>'停電させられる時間帯', 'type'=>'select', 'def'=>'off', 'opts'=>'bz_stop'),
             array('key'=>'bz_tenant',  'label'=>'テナント入居か自社物件か','type'=>'select','def'=>'off','opts'=>'bz_tenant'),
         ),
@@ -124,6 +133,9 @@ function eaf_property_fields() {
            受ける枠なので、見出しを「お困りごと」に寄せず中立にしてある。 */
         'other' => array(
             array('key'=>'ot_note',    'label'=>'お問い合わせ内容','type'=>'textarea','def'=>'req', 'ph'=>'例：時々部屋の電気が消えます／以前お願いした工事の件で相談したい'),
+            /* 提携の営業・取引の相談もここで受けるので、社名を書く場所を用意する。
+               個人の方も通るため任意。必須にすると個人が書けなくなる。 */
+            array('key'=>'company',    'label'=>'会社名・屋号','type'=>'text','col'=>'company','len'=>150,'def'=>'opt','ph'=>'例：株式会社◯◯（法人の方のみ）'),
         ),
     );
 }
@@ -272,7 +284,9 @@ function eaf_opt_list($key) {
 
         /* ── 法人 ───────────────────────────────────── */
         case 'bz_kind':   return array('店舗','事務所','工場','倉庫','アパート・マンション（オーナー）','その他');
-        case 'bz_work':   return array('業務用エアコン','LED化','キュービクル更新','LAN配線','新築','改装・原状回復','その他');
+        /* ★法人向け記事9本（業務用エアコン／LED化／キュービクル／LAN配線／新築／
+           店舗・事務所・工場）の受け皿。ここに無い工事は「その他・分からない」で拾う。 */
+        case 'bz_work':   return array('業務用エアコン','LED化・照明','キュービクル・受電設備','LAN・電話配線','新築・改装・原状回復','その他・分からない');
         case 'bz_stop':   return array('営業時間中でも可','営業時間外のみ','休業日のみ','止められない','相談したい');
         case 'bz_tenant': return array('テナントとして入居','自社物件','オーナーとして所有','分からない');
     }
@@ -304,6 +318,7 @@ function eaf_activate() {
         detail VARCHAR(2000) NULL,
         timing VARCHAR(50) NULL,
         marketing_opt_in TINYINT(1) DEFAULT 0,
+        company VARCHAR(150) NULL,
         page_url VARCHAR(255) NULL,
         sheet_sent TINYINT(1) DEFAULT 0,
         PRIMARY KEY  (id)
@@ -317,7 +332,11 @@ function eaf_activate() {
 /** 保存先カラムの一覧（スキーマから自動生成）: col => 最大長 */
 function eaf_lead_columns() {
     $cols = array();
-    foreach (array(eaf_customer_fields(), eaf_situation_fields()) as $flds) {
+    $sets = array(eaf_customer_fields(), eaf_situation_fields());
+    /* ★工事内容ごとの項目にもカラムを持つものがある（法人・その他の会社名）。
+       ここに入れ忘れると ALTER が走らず、insert がそのキーで丸ごと失敗する。 */
+    foreach (eaf_property_fields() as $flds) $sets[] = $flds;
+    foreach ($sets as $flds) {
         foreach ($flds as $fd) {
             if (!empty($fd['col'])) $cols[$fd['col']] = isset($fd['len']) ? (int)$fd['len'] : 191;
         }
@@ -412,7 +431,7 @@ function eaf_form_url() {
  *   「コードの既定を変えたのに、保存済みの環境では何も変わらない」状態になる。
  *   ここを上げた更新では、保存済みのモードを一度だけ捨てて既定に戻す。
  */
-define('EAF_FIELD_DEFAULTS_VER', '5');   // 5 = 配色をサイト（紺×アンバー）に合わせる
+define('EAF_FIELD_DEFAULTS_VER', '6');   // 6 = 法人はカード選択＋会社名（用途は任意へ）
 
 function eaf_maybe_reset_field_modes() {
     if (get_option('eaf_field_defaults_ver') === EAF_FIELD_DEFAULTS_VER) return;
@@ -1945,11 +1964,17 @@ function eaf_leads_page() {
         $det = isset($r->details) ? (string)$r->details : '';
         $del = wp_nonce_url(admin_url('admin-post.php?action=eaf_delete_lead&id=' . $r->id), 'eaf_delete_lead_' . $r->id);
         $g = function ($v) { return ($v !== null && $v !== '') ? $v : '-'; };
-        printf('<tr><td>%s</td><td><strong>%s</strong></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+        /* ★会社名は列を増やさず、お名前の上に小さく出す。
+           法人は全体の数%なので、専用の列にするとほとんどが「-」で埋まる。 */
+        $namecell = '<strong>' . esc_html($g(isset($r->name) ? $r->name : '')) . '</strong>';
+        $co = isset($r->company) ? (string) $r->company : '';
+        if ($co !== '') $namecell = '<span style="display:block;font-size:12px;color:#555">'
+                                  . esc_html($co) . '</span>' . $namecell;
+        printf('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
              . '<td style="white-space:pre-line;font-size:12px;line-height:1.5">%s</td>'
              . '<td><a href="%s" onclick="return confirm(\'この反響を削除しますか？\')" style="color:#b32d2e">削除</a></td></tr>',
             esc_html($r->created_at),
-            esc_html($g(isset($r->name) ? $r->name : '')),
+            $namecell,   /* 中で esc_html 済み */
             esc_html($g(isset($r->tel) ? $r->tel : '')),
             esc_html($g($r->email)),
             esc_html($plabel),
@@ -1977,8 +2002,8 @@ function eaf_export_leads() {
     header('Content-Disposition: attachment; filename="eamber_oiawase.csv"');
     $out = fopen('php://output', 'w');
     if (!$can_sjis) fwrite($out, "\xEF\xBB\xBF");
-    $head = array('ID','受付日時','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','送信元ページ');
-    $cols = array('id','created_at','name','kana','tel','email','contact_time','ptype','address','building','ownership','timing','detail','details','page_url');
+    $head = array('ID','受付日時','会社名','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','送信元ページ');
+    $cols = array('id','created_at','company','name','kana','tel','email','contact_time','ptype','address','building','ownership','timing','detail','details','page_url');
     $sjis = function ($s) use ($can_sjis) {
         return $can_sjis ? mb_convert_encoding((string)$s, 'SJIS-win', 'UTF-8') : (string)$s;
     };
@@ -2083,7 +2108,8 @@ function eaf_ajax() {
                 if ($ne !== '') { $errors[] = $ne; $val = ''; $bad = true; }
             }
             // 選択肢は選択肢外の値を無視（フォーム改ざん対策）
-            if ($fd['type'] === 'select' && $val !== '' && !in_array($val, eaf_opt_list($fd['opts']), true)) $val = '';
+            if (($fd['type'] === 'select' || $fd['type'] === 'cards')
+                && $val !== '' && !in_array($val, eaf_opt_list($fd['opts']), true)) $val = '';
             if ($fd['type'] === 'tel' && $val !== '') {
                 // 全角で入力されることが多い。担当者がそのまま発信できるよう半角に揃えて保存する
                 $val = trim(eaf_to_hankaku($val));
@@ -2155,7 +2181,13 @@ function eaf_ajax() {
             }
         }
     }
-    $detail_lines = array_merge($detail_lines, $prop_lines);
+    /* ★工事内容ごとの項目も、専用カラムを持つもの（会社名）は詳細から外す。
+       まとめて足すと、会社名の列と詳細の両方に同じ値が並ぶ。 */
+    foreach ($prop_vals as $item) {
+        if (empty($item['fd']['col']) && $item['val'] !== '') {
+            $detail_lines[] = '■ ' . $item['fd']['label'] . ' : ' . $item['val'];
+        }
+    }
 
     // 完了画面の「ご入力内容」用。お名前・電話・種別・住所は表で別に出すため、ここには入れない
     $confirm_lines = array_merge($situ_lines, $prop_lines);
@@ -2173,7 +2205,7 @@ function eaf_ajax() {
     );
     // 個別カラムを持つ項目（お名前・電話番号など）を、カラム長に丸めて格納
     $lens = eaf_lead_columns();
-    foreach (array($cust, $situ) as $set) {
+    foreach (array($cust, $situ, $prop_vals) as $set) {
         foreach ($set as $item) {
             $col = isset($item['fd']['col']) ? $item['fd']['col'] : null;
             if ($col) $row[$col] = eaf_trim_len($item['val'], isset($lens[$col]) ? $lens[$col] : 191);
@@ -2367,6 +2399,7 @@ function eaf_form_css() {
     }
     @media (prefers-reduced-motion:reduce){
       .fhs-wrap select.fhs-next,.fhs-wrap input.fhs-next,.fhs-wrap textarea.fhs-next{animation:none;box-shadow:0 0 0 3px rgba(var(--fhs-next-rgb),.38)}
+      .fhs-wrap .fhs-choice-val.fhs-next + .fhs-choice{animation:none;box-shadow:0 0 0 3px rgba(var(--fhs-next-rgb),.38)}
     }
 
     /* デザイン: card */
@@ -2435,6 +2468,30 @@ function eaf_form_css() {
       box-shadow:inset 0 -3px 0 rgba(0,0,0,.07),0 7px 15px rgba(40,45,60,.18)
     }
     .fhs-wrap .fhs-tile-input:focus-visible + .fhs-tile{box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.3)}
+    /* ★法人の枝だけに出る二段目のカード。タイルの下位にある選択なので、
+       アイコンを付けず、面で塗らずに輪郭で見せる。同じ見た目のグリッドが
+       上下に2つ並ぶと、いま何を選んだのかが分からなくなるため。 */
+    .fhs-choice{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-radius:9px}
+    .fhs-wrap .fhs-choice-in,.fhs-wrap input[type=radio].fhs-choice-in{position:absolute;opacity:0;width:1px;height:1px;padding:0;border:0;pointer-events:none;appearance:none;-webkit-appearance:none}
+    .fhs-wrap .fhs-choice-opt{
+      display:flex;align-items:center;justify-content:center;text-align:center;
+      background:#fff;color:var(--fhs-ink);
+      border:1.5px solid var(--fhs-line);border-radius:7px;
+      padding:12px 8px;margin:0;cursor:pointer;
+      font-weight:600;font-size:13.5px;line-height:1.4;
+      transition:border-color .15s,background .15s,box-shadow .15s
+    }
+    .fhs-wrap .fhs-choice-opt:hover{border-color:rgba(var(--fhs-brand-rgb),.5);background:rgba(var(--fhs-brand-rgb),.04)}
+    .fhs-wrap .fhs-choice-in:checked + .fhs-choice-opt{
+      background:var(--t-sel-bg,rgba(var(--fhs-brand-rgb),.08));
+      color:var(--t-sel-fg,var(--fhs-ink));
+      border-color:var(--t-sel-bd,var(--fhs-brand));
+      box-shadow:inset 0 0 0 1px var(--t-sel-bd,var(--fhs-brand))
+    }
+    .fhs-wrap .fhs-choice-in:focus-visible + .fhs-choice-opt{box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.3)}
+    /* ★次に選ぶ場所の合図。値を持つのは隠し入力なので、光らせるのは隣の並びのほう。
+       1枚ずつ光らせると6枚が同時に点滅してうるさいため、囲みにだけ掛ける。 */
+    .fhs-wrap .fhs-choice-val.fhs-next + .fhs-choice{animation:fhsPulse 1.5s ease-in-out infinite}
 <?php echo eaf_tile_palette_css(); ?>
     /* ティザーは記事の途中に置く小さな入口なので、タイルも一回り小さくする */
     /* ★列数は本体と同じ3列を継ぐ。ここで auto-fit に戻すと、記事の幅が広いページで
@@ -2486,6 +2543,7 @@ function eaf_form_css() {
       .fhs-design-teaser .fhs-ttags{order:0;flex:1 1 100%;margin-left:0;margin-bottom:2px;justify-content:center}
       /* 3列だと1枚あたりが狭すぎて代表例が読めなくなるので、狭い端末は2列 */
       .fhs-tiles{grid-template-columns:repeat(2,1fr);gap:8px}
+      .fhs-choice{grid-template-columns:repeat(2,1fr);gap:7px}
       .fhs-wrap .fhs-tile{min-height:0;padding:13px 8px}
       .fhs-ttitle{font-size:19px}
       .fhs-design-teaser .fhs-card,.fhs-design-teaser-v .fhs-card{padding:18px 16px 20px}
@@ -2722,7 +2780,8 @@ function eaf_form_js() {
         errBox.innerHTML = miss.map(function(el){
           var why = fieldProblem(el);
           var name = esc(labelTextOf(el));
-          var chooser = (el.name === 'ptype' || el.tagName === 'SELECT');
+          var chooser = (el.name === 'ptype' || el.tagName === 'SELECT'
+                      || el.classList.contains('fhs-choice-val'));
           var msg = (why === 'format') ? '「' + name + '」の形式をご確認ください。'
                   : chooser            ? '「' + name + '」をお選びください。'
                                        : '「' + name + '」を入力してください。';
@@ -2754,6 +2813,16 @@ function eaf_form_js() {
 
   Array.prototype.forEach.call(form.querySelectorAll('input[name="ptype"]'), function(r){
     r.addEventListener('change', switchType);
+  });
+  /* ★二段目のカード（法人の工事内容）。選ばれた値を隠し入力へ写す。
+     必須チェックも「あと◯項目」も data-req の付いた入力欄を見て動くので、
+     ここで写さないと、選んでいるのに「選んでいない」扱いのままになる。 */
+  Array.prototype.forEach.call(form.querySelectorAll('.fhs-choice-in'), function(r){
+    r.addEventListener('change', function(){
+      var h = document.getElementById(r.getAttribute('data-for'));
+      if (h) h.value = r.checked ? r.value : '';
+      updateFormState();
+    });
   });
   Array.prototype.forEach.call(form.querySelectorAll('.fhs-typed, select[name="address"], input[name="email"]'), function(el){
     el.addEventListener('change', updateFormState);
@@ -2989,14 +3058,14 @@ function eaf_sheet_gas_code() {
         "    if (SECRET && data.secret !== SECRET) return out({ ok: false, error: 'secret' });",
         "    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];",
         "    if (sh.getLastRow() === 0) {",
-        "      sh.appendRow(['受付日時','工事内容','市町村','お名前','フリガナ','電話番号','メール',",
+        "      sh.appendRow(['受付日時','工事内容','市町村','会社名','お名前','フリガナ','電話番号','メール',",
         "                    '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
         "                    '症状・ご希望','詳細','送信元ページ','ID']);",
         "    }",
         "    // ★列は固定。フォームで項目を出す/隠すを切り替えても列はずれない。",
         "    //   隠している項目はその列が空になるだけ。",
         "    sh.appendRow([",
-        "      data.created_at, data.ptype, data.address, data.name, data.kana, data.tel, data.email,",
+        "      data.created_at, data.ptype, data.address, data.company, data.name, data.kana, data.tel, data.email,",
         "      data.contact_time, data.building, data.ownership, data.timing,",
         "      data.detail, data.details, data.page_url, data.id",
         "    ]);",
@@ -3029,6 +3098,7 @@ function eaf_sheet_payload($r) {
         'created_at' => isset($r['created_at']) ? $r['created_at'] : '',
         'ptype'      => isset($GLOBALS['EAF_PTYPE_LABEL'][$pt]) ? $GLOBALS['EAF_PTYPE_LABEL'][$pt] : $pt,
         'address'    => isset($r['address']) ? $r['address'] : '',
+        'company'    => isset($r['company']) ? $r['company'] : '',
         'name'       => isset($r['name']) ? $r['name'] : '',
         'kana'       => isset($r['kana']) ? $r['kana'] : '',
         'tel'        => isset($r['tel']) ? $r['tel'] : '',
@@ -3428,6 +3498,18 @@ function eaf_shortcode($atts = array()) {
             <option value="<?php echo esc_attr($o); ?>"><?php echo esc_html($o); ?></option>
 <?php endforeach; ?>
           </select>
+<?php elseif ($fd['type'] === 'cards'): ?>
+          <?php /* ★値は隠し入力に持たせる。必須チェック・「あと◯項目」・エラー文言は
+                   すべて data-req の付いた入力欄を見て動くので、ラジオのままだと
+                   その仕組みから外れて「選ばなくても次へ進める」状態になる。 */ ?>
+          <input type="hidden" name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed fhs-choice-val" data-req="<?php echo $req ? '1' : ''; ?>" value="">
+          <div class="fhs-choice" role="radiogroup" aria-label="<?php echo esc_attr($fd['label']); ?>">
+<?php foreach (eaf_opt_list($fd['opts']) as $oi => $o):
+        $cid = $id . '-c' . (int) $oi; ?>
+            <input type="radio" name="<?php echo esc_attr($nm . '__pick'); ?>" id="<?php echo esc_attr($cid); ?>" value="<?php echo esc_attr($o); ?>" class="fhs-choice-in" data-for="<?php echo esc_attr($id); ?>">
+            <label class="fhs-choice-opt" for="<?php echo esc_attr($cid); ?>"><?php echo esc_html($o); ?></label>
+<?php endforeach; ?>
+          </div>
 <?php elseif ($fd['type'] === 'textarea'): ?>
           <textarea name="<?php echo esc_attr($nm); ?>" id="<?php echo esc_attr($id); ?>" class="fhs-typed" data-req="<?php echo $req ? '1' : ''; ?>" rows="2" placeholder="<?php echo esc_attr(isset($fd['ph']) ? $fd['ph'] : ''); ?>"></textarea>
 <?php else:

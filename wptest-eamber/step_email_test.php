@@ -44,7 +44,10 @@ $expected = array(
     'agree',              // 同意（必須）
     'aircon__ac_work',    // 工事内容別の必須 × 8種
     'breaker__br_symptom',
-    'business__bz_kind',
+    'business__bz_work',        // 法人はカード選択（必須）
+    'business__bz_work__pick',  // ↑カードのラジオ。値は business__bz_work に写す
+    'business__company',        // 法人は会社名も必須
+    'other__company',           // その他は会社名を任意で
     'customer_name',      // お名前（必須）
     'customer_tel',       // 電話番号（必須）
     'eaf_website',        // ハニーポット（人には見えない）
@@ -58,7 +61,9 @@ $expected = array(
     'wiring__wr_work',
 );
 sort($expected);
-t('既定で出る入力欄は必須＋メール＋同意だけ', $names, $expected);
+/* ★既定で出る任意の欄は「その他」の会社名だけ。個人の8枚を選んだ人の画面には
+     1つも増えない。ここが増えていたら、軽さの前提が崩れている合図。 */
+t('既定で出る入力欄は必須＋メール＋同意＋その他の会社名だけ', $names, $expected);
 
 /* ================= 2c. 工事内容はタイルで選ばせる ================= */
 t('工事内容にセレクトを使っていない', strpos($html, '<select name="ptype"') !== false, false);

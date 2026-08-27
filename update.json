@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.5.1\n・スプレッドシート連携の失敗理由が分かるようにしました。Googleが返すエラーページをそのまま出さず、要点だけ表示します\n・転記先URLの形が違う場合、設定画面でその場で知らせるようにしました\n・送信方法を2通り試すようにしました（GAS側の設定によってはJSON形式が弾かれるため）\n・貼り付け用スクリプトにフリガナが抜けていたのを修正しました"
+    "changelog": "1.5.2\n・テストメールが送れなかったときに、原因の心当たりを順番に表示するようにしました\n・「送信元メール」にGmailなどのフリーメールが入っている場合、設定画面で警告するようにしました（差出人にフリーメールは使えません。受け取り用のGmailは問題ありません）\n・担当者への通知メールが送れなかった場合、管理画面でお知らせするようにしました。反響そのものは反響一覧に残ります"
   }
 }

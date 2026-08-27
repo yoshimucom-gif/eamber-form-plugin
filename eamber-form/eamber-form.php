@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.5.1
+ * Version: 1.5.2
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.5.1');
+define('EAF_VER', '1.5.2');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -517,6 +517,23 @@ add_action('admin_notices', function () {
 function eaf_site_is_https() {
     return strpos(strtolower((string) home_url()), 'https://') === 0;
 }
+
+/* ★担当者への通知が送れていないことを知らせる。
+     反響は保存されているのに誰も気づかない、という状態を放置しない。 */
+add_action('admin_notices', function () {
+    if (!current_user_can('manage_options')) return;
+    $f = get_option('eaf_notify_failed');
+    if (!is_array($f)) return;
+    $free = eaf_free_mail_domain(eaf_opt('from_email'));
+    echo '<div class="notice notice-error"><p><strong>【電気工事反響フォーム】担当者への通知メールが送れていません。</strong><br>'
+       . '最後に失敗したのは ' . esc_html($f['at']) . '（宛先 ' . esc_html($f['to']) . '）です。'
+       . '<strong>反響そのものは「反響一覧」に保存されています</strong>ので、まずはそちらをご確認ください。<br>'
+       . ($free
+           ? '差出人が <strong>' . esc_html($free) . '</strong> になっています。これが原因の可能性が高いです。'
+             . 'サイトと同じドメインのアドレスに変えるか、空欄にしてください。'
+           : '「基本設定」タブでテストメールを送ると、原因の見当が付きます。')
+       . ' <a href="' . esc_url(admin_url('admin.php?page=eamber-form')) . '">設定を開く</a></p></div>';
+});
 
 /* 公開前チェック。お客様に見える信頼性の材料が抜けたまま公開されるのを防ぐ */
 add_action('admin_notices', function () {
@@ -1151,7 +1168,15 @@ function eaf_settings_page() {
             echo '<div class="notice notice-' . ($tm_ok ? 'success' : 'error') . '"><p>' .
                 ($tm_ok
                     ? 'テストメールを <strong>' . esc_html($tm_to) . '</strong> に送信しました。届かない場合は<strong>迷惑メールフォルダ</strong>も確認してください（届かない＝SPF/DKIM未設定の可能性大）。'
-                    : 'テストメールの送信に失敗しました。WP Mail SMTP などの送信設定を確認してください。') .
+                    : 'テストメールを送れませんでした。<strong>心当たりの多い順に</strong>：<br>'
+                      . '① <strong>「送信元メール」にGmailなどのフリーメールを入れていないか。</strong>'
+                      . '差出人はサイトと同じドメイン（例：<code>info@kai-denkou.com</code>）にしてください。'
+                      . 'Gmailを差出人にすると、そのドメインの送信許可にこのサーバーが入っていないため拒否されます。'
+                      . '<strong>受け取り側（通知先メール）がGmailなのは問題ありません。</strong><br>'
+                      . '② 送信元メールを<strong>空欄</strong>にして、もう一度試す（WordPressの既定の差出人になります）。'
+                      . 'これで送れるなら①が原因です。<br>'
+                      . '③ それでも送れない場合はサーバーがメールを送れない状態です。'
+                      . '「WP Mail SMTP」などのプラグインで、実際のメールアカウント経由の送信に切り替えてください。') .
                 '</p></div>';
         } ?>
         <?php
@@ -1210,11 +1235,25 @@ function eaf_settings_page() {
                 <tr><th>所在地</th><td><input type="text" name="<?php echo EAF_OPT; ?>[operator_address]" value="<?php echo esc_attr(eaf_opt('operator_address')); ?>" size="50" placeholder="例：山梨県甲府市○○1-2-3">
                     <p class="description">受付完了メールの末尾の署名に載ります（任意）。</p></td></tr>
                 <tr><th>送信元メール</th><td><input type="email" name="<?php echo EAF_OPT; ?>[from_email]" value="<?php echo esc_attr(eaf_opt('from_email')); ?>" size="40" placeholder="<?php echo esc_attr(get_option('admin_email')); ?>">
-                    <p class="description">お客様への受付完了メールの差出人。空欄ならWordPressの既定の差出人になります。到達率のため WP Mail SMTP 等で SPF/DKIM を設定してください。</p></td></tr>
+                    <p class="description">
+                        お客様に届く受付完了メールの<strong>差出人</strong>です。<br>
+                        <strong>必ずサイトと同じドメインのアドレスにしてください</strong>（例：<code>info@kai-denkou.com</code>）。
+                        空欄ならWordPressの既定の差出人になります。<br>
+                        <span class="description">※ここに<strong>Gmailなどのフリーメールを入れると送れません。</strong>
+                        そのドメインの送信許可にこのサーバーが入っていないためです。受け取り用にGmailを使うのは問題ありません（下の「通知先メール」）。</span>
+                    </p>
+<?php $eaf_free = eaf_free_mail_domain(eaf_opt('from_email')); if ($eaf_free): ?>
+                    <p class="description" style="color:#b32d2e"><strong>差出人が <?php echo esc_html($eaf_free); ?> になっています。</strong>
+                        このままではメールが送れないか、届いても迷惑メール扱いになります。
+                        サイトと同じドメインのアドレスに変えるか、空欄にしてください。</p>
+<?php endif; ?></td></tr>
                 <tr><th>通知先メール（担当者）</th><td>
                     <input type="email" name="<?php echo EAF_OPT; ?>[notify_email]" value="<?php echo esc_attr(eaf_opt('notify_email')); ?>" size="40"><br>
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[notify_on]" value="1" <?php checked(eaf_flag('notify_on', true)); ?>> 申し込みが届いたら通知する</label>
-                    <p class="description">空欄なら送信元メール（無ければ管理者アドレス）に通知します。<strong>工事の問い合わせは急ぎのお客様が多いので、通知は必ずONを推奨します。</strong></p></td></tr>
+                    <p class="description">
+                        反響が届いたことを知らせる<strong>受け取り先</strong>です。<strong>Gmailで構いません。</strong><br>
+                        空欄なら送信元メール（無ければ管理者アドレス）に通知します。<strong>工事の問い合わせは急ぎのお客様が多いので、通知は必ずONを推奨します。</strong>
+                    </p></td></tr>
                 <tr><th>フォーム冒頭の案内文</th><td>
                     <textarea name="<?php echo EAF_OPT; ?>[lead_text]" rows="3" style="width:100%;max-width:760px"><?php echo esc_textarea(eaf_opt('lead_text')); ?></textarea>
                     <p class="description">フォームの一番上に表示される案内文（任意）。例：「症状とお住まいの市町村が分かれば話が始められます。まずはお気軽にお問い合わせください。」</p></td></tr>
@@ -2175,7 +2214,11 @@ function eaf_ajax() {
         $notify = eaf_opt('notify_email', $from ?: get_option('admin_email'));
         if ($notify) {
             $subj = '【お問い合わせ】' . $label . ' / ' . $address . ($ctx['name'] !== '' ? ' / ' . $ctx['name'] . '様' : '');
-            wp_mail($notify, $subj, eaf_admin_notify_body($ctx), $headers);
+            if (wp_mail($notify, $subj, eaf_admin_notify_body($ctx), $headers)) {
+                delete_option('eaf_notify_failed');
+            } else {
+                eaf_notify_failed($notify);
+            }
         }
     }
 
@@ -2979,6 +3022,23 @@ function eaf_sheet_payload($r) {
  * 1件送る。成功なら true、失敗なら理由の文字列。
  * ★受付の途中で呼ぶので待ち時間は短く。転記が遅れても受付は先に完了させる。
  */
+/**
+ * 差出人にフリーメールを使っていないか。
+ * ★gmail.com などを差出人にすると、そのドメインの送信許可（SPF）に
+ *   このサーバーが入っていないため、受け取り側に拒否されるか迷惑メールに入る。
+ *   サーバー側が送信前に弾いて wp_mail が false を返すこともある。
+ *   受け取り（通知先）にGmailを使うのは全く問題ない。差出人だけの話。
+ */
+function eaf_free_mail_domain($email) {
+    $email = strtolower(trim((string) $email));
+    if ($email === '' || strpos($email, '@') === false) return '';
+    $d = substr($email, strrpos($email, '@') + 1);
+    $free = array('gmail.com','googlemail.com','yahoo.co.jp','yahoo.com','outlook.com',
+                  'outlook.jp','hotmail.com','hotmail.co.jp','live.jp','icloud.com',
+                  'me.com','aol.com','docomo.ne.jp','ezweb.ne.jp','au.com','softbank.ne.jp');
+    return in_array($d, $free, true) ? $d : '';
+}
+
 /** ウェブアプリのURLの形が正しいか（ここを間違えるとHTTP 400が返る） */
 function eaf_sheet_url_ok($url) {
     return (bool) preg_match('#^https://script\.google\.com/macros/s/[A-Za-z0-9_\-]+/exec$#', (string) $url);
@@ -3044,6 +3104,17 @@ function eaf_sheet_send($payload) {
               . eaf_trim_len(eaf_sheet_clean_error($body), 160);
     }
     return $last;
+}
+
+/**
+ * 担当者への通知が送れなかったことを控える。
+ * ★ここが黙って失敗すると、反響が届いているのに誰も気づかない。
+ *   受付自体は成立しているので画面には出さず、管理画面で知らせる。
+ */
+function eaf_notify_failed($to) {
+    update_option('eaf_notify_failed', array(
+        'to' => eaf_trim_len((string) $to, 191), 'at' => current_time('mysql'),
+    ), 'no');
 }
 
 /** 直近の連携エラーを控える（値が混ざりうるので autoload には載せない） */

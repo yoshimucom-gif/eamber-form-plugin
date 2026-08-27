@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.6.1
+ * Version: 1.6.2
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.6.1');
+define('EAF_VER', '1.6.2');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -678,7 +678,7 @@ $GLOBALS['EAF_PTYPE_SHORT'] = array(
     'fan'      => '換気扇',
     'wiring'   => '住宅の配線・全般',
     'business' => '店舗・事務所・工場',
-    'other'    => 'まだ決まっていない',
+    'other'    => 'その他',
 );
 
 /**
@@ -776,7 +776,7 @@ $GLOBALS['EAF_PTYPE_NOTE'] = array(
     'fan'      => '動かない・異音・交換',
     'wiring'   => '配線の交換・リフォーム・新築',
     'business' => 'キュービクル・LED化・LAN',
-    'other'    => 'まずは相談だけでも',
+    'other'    => 'そのほかのお問い合わせ',
 );
 
 /* =========================================================================

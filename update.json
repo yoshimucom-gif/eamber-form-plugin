@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.6.2\n・説明書に残っていた、廃止済みの「営業同意」に関する記述を削除しました"
+    "changelog": "1.6.3\n9枚目のタイルを「まだ決まっていない」から「その他 / その他の問い合わせ・相談」に変更。自由記述の見出しを「お問い合わせ内容」に変更（タイルの問いかけとの重複を解消）。"
   }
 }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.6.3
+ * Version: 1.6.4
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.6.3');
+define('EAF_VER', '1.6.4');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1946,7 +1946,7 @@ function eaf_leads_page() {
         $del = wp_nonce_url(admin_url('admin-post.php?action=eaf_delete_lead&id=' . $r->id), 'eaf_delete_lead_' . $r->id);
         $g = function ($v) { return ($v !== null && $v !== '') ? $v : '-'; };
         printf('<tr><td>%s</td><td><strong>%s</strong></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
-             . '<td style="white-space:pre-line;font-size:12px;line-height:1.5">%s</td><td>%s</td>'
+             . '<td style="white-space:pre-line;font-size:12px;line-height:1.5">%s</td>'
              . '<td><a href="%s" onclick="return confirm(\'この反響を削除しますか？\')" style="color:#b32d2e">削除</a></td></tr>',
             esc_html($r->created_at),
             esc_html($g(isset($r->name) ? $r->name : '')),
@@ -1958,7 +1958,7 @@ function eaf_leads_page() {
             esc_html($g(isset($r->timing) ? $r->timing : '')),
             esc_html($det !== '' ? $det : '-'),
             esc_url($del));
-    } else echo '<tr><td colspan="11">まだありません</td></tr>';
+    } else echo '<tr><td colspan="10">まだありません</td></tr>';
     echo '</tbody></table></div>';
 }
 

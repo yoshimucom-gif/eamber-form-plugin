@@ -26,11 +26,16 @@ t('third_party は保存されない',      array_key_exists('third_party', $o),
 t('third_party_name は保存されない', array_key_exists('third_party_name', $o), false);
 t('third_party_url は保存されない',  array_key_exists('third_party_url', $o), false);
 
-/* --- 2. フォームの同意文は「提供しない」で固定 --- */
+/* --- 2. 同意はプライバシーポリシー1本だけ --- */
+update_option(EAF_OPT, eaf_sanitize_options(array('privacy_url' => 'https://example.test/privacy/')));
 $html = eaf_shortcode(array());
-t('「第三者に提供することはありません」が出る', strpos($html, 'ご本人の同意なく第三者に提供することはありません') !== false, true);
-t('提供する旨の文言は出ない', strpos($html, 'にご入力内容') !== false, false);
+t('同意文はプライバシーポリシーだけ',
+  strpos($html, 'プライバシーポリシー</a>に同意します（必須）') !== false, true);
+t('免責事項への同意は求めない', strpos($html, '免責事項') !== false, false);
 t('「提供を含む」の同意文が出ない', strpos($html, 'への提供を含む') !== false, false);
+/* ★個人情報の説明文は機能ごと廃止した（利用目的はプライバシーポリシーで公表） */
+t('説明文の枠は出さない', strpos($html, 'fhs-privacy-note') !== false, false);
+t('提供する旨の文言も無い', strpos($html, 'にご入力内容') !== false, false);
 
 /* --- 3. 設定画面に「個人情報」タブが無い --- */
 $GLOBALS['FAKE_IS_ADMIN'] = true;

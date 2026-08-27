@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.5.2\n・テストメールが送れなかったときに、原因の心当たりを順番に表示するようにしました\n・「送信元メール」にGmailなどのフリーメールが入っている場合、設定画面で警告するようにしました（差出人にフリーメールは使えません。受け取り用のGmailは問題ありません）\n・担当者への通知メールが送れなかった場合、管理画面でお知らせするようにしました。反響そのものは反響一覧に残ります"
+    "changelog": "1.6.0\n・「個人情報の取り扱いについて」の説明文と「営業案内メールを希望」チェック欄を廃止しました。お客様に読ませる同意はプライバシーポリシーの1つだけになります\n・それに伴い、反響一覧・CSV・スプレッドシートから「営業同意」の列をなくしました\n・テストメールの宛先を指定できるようにしました。通知先（担当者）のアドレスで試せます"
   }
 }

@@ -28,6 +28,13 @@ update_option(EAF_OPT, eaf_sanitize_options(array('from_email' => 'info@kai-denk
 ob_start(); eaf_settings_page(); $page = ob_get_clean();
 t('自社ドメインなら警告しない', strpos($page, 'になっています。</strong>') !== false, false);
 t('通知先はGmailで良いと書いてある', strpos($page, 'Gmailで構いません') !== false, true);
+/* --- テストメールの宛先を選べる --- */
+ob_start(); eaf_settings_page(); $page = ob_get_clean();
+t('宛先の入力欄がある',   strpos($page, 'id="eaf-test-to"') !== false, true);
+t('送信ボタンがある',     strpos($page, 'id="eaf-test-send"') !== false, true);
+t('入力値をURLに載せる',  strpos($page, "'&to=' + encodeURIComponent") !== false, true);
+t('「自分宛」固定の文言をやめた', strpos($page, 'テストメールを自分宛に送信') !== false, false);
+
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 @unlink($GLOBALS['FAKE_STATE_FILE']);
 exit($ng ? 1 : 0);

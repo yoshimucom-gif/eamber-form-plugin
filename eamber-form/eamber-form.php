@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.5.2
+ * Version: 1.6.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.5.2');
+define('EAF_VER', '1.6.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -424,6 +424,7 @@ function eaf_maybe_reset_field_modes() {
            ★廃止した設定も掃除する（次に同じ名前を使ったとき古い値が効くため）。 */
         unset($o['show_note']);
         unset($o['show_marketing']);
+        unset($o['show_privacy_note']);
         unset($o['spam_block_link']);
         /* フォーク元の既定色そのままなら捨てて、サイトに合わせた新しい既定に任せる。
            手で選んだ色は消さない。 */
@@ -602,7 +603,6 @@ function eaf_sanitize_options($in) {
         // チェックボックス（未送信＝OFF。'' ではなく明示的に '0' を入れて区別する）
         'notify_on'        => !empty($in['notify_on'])      ? '1' : '0',
         // フォーム上に問い合わせ先（電話番号）を出すか。既定はOFF
-        'show_marketing'   => !empty($in['show_marketing']) ? '1' : '0',
         'step_form'        => !empty($in['step_form'])      ? '1' : '0',
         // スパム対策
         'spam_block_link'  => !empty($in['spam_block_link'])  ? '1' : '0',
@@ -637,7 +637,6 @@ function eaf_sanitize_options($in) {
         'color_tel_bd'     => sanitize_hex_color($in['color_tel_bd'] ?? '')   ?: '#DCE2EB',
         'color_tel_fg'     => sanitize_hex_color($in['color_tel_fg'] ?? '')   ?: '#1E3050',
         'color_next'       => sanitize_hex_color($in['color_next'] ?? '')     ?: '#EFC24A',
-        'show_privacy_note' => !empty($in['show_privacy_note']) ? '1' : '0',
     );
     // 各項目のモード（必須／任意／非表示）。スキーマを回して必ず明示値を保存する
     foreach (eaf_all_groups() as $g => $flds) {
@@ -1031,7 +1030,7 @@ function eaf_mail_subject() {
 
 /**
  * 管理者通知メールの本文（担当者へ）。
- * ★営業連絡の可否（オプトイン有無）を必ず明記する。
+ * 受け取った内容をそのまま担当者へ渡す。
  *   担当者が特定電子メール法に違反する営業メールを送ってしまう事故を防ぐため。
  */
 function eaf_admin_notify_body($ctx) {
@@ -1043,12 +1042,6 @@ function eaf_admin_notify_body($ctx) {
     $b .= (isset($ctx['property_details']) ? $ctx['property_details'] : '') . "\n";
     /* ★チェック欄を出していないなら、この節は書かない。
        求めてもいない同意の可否を毎回伝えても、担当者には読む行が増えるだけ。 */
-    if (eaf_flag('show_marketing', false)) {
-        $b .= "\n───── 営業連絡について ─────\n";
-        $b .= !empty($ctx['marketing'])
-            ? "○ 営業案内メールの受け取りに同意いただいています。\n"
-            : "× 営業案内メールの受け取りには同意されていません。\n  今回のお申し込みへのご対応以外の営業メールは送らないでください（特定電子メール法）。\n";
-    }
     $b .= "\n管理画面「電気工事反響フォーム → 反響一覧」からも確認できます。";
     return $b;
 }
@@ -1085,7 +1078,10 @@ add_action('admin_post_eaf_test_mail', 'eaf_test_mail');
 function eaf_test_mail() {
     if (!current_user_can('manage_options')) wp_die('権限がありません');
     check_admin_referer('eaf_test_mail');
-    $to = wp_get_current_user()->user_email;
+    /* 宛先は画面で指定できる。「自分宛」だけだと、実際に受け取る担当者へ
+       届くかどうかを試せない（そこが本当に確かめたいところ）。 */
+    $to = sanitize_email((string) wp_unslash($_GET['to'] ?? ''));
+    if (!is_email($to)) $to = wp_get_current_user()->user_email;
     $ctx = array(
         'name' => '山田 太郎', 'email' => $to, 'tel' => '090-1234-5678',
         'ptype_label' => 'エアコン（取り付け・修理）', 'address' => '甲府市',
@@ -1374,18 +1370,6 @@ function eaf_settings_page() {
                 </p>
             </td></tr></table>
 
-            <h4 style="margin:26px 0 6px">そのほかの欄</h4>
-            <table class="form-table"><tr><th>表示する項目</th><td>
-                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_privacy_note]" value="1" <?php checked(eaf_flag('show_privacy_note', false)); ?>> 「個人情報の取り扱いについて」の説明文</label><br>
-                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_marketing]" value="1" <?php checked(eaf_flag('show_marketing', false)); ?>> 「営業案内メールを希望」チェック欄（★既定はオフ）</label>
-                <p class="description">
-                    <strong>個人情報の説明文は既定でオフです。</strong>利用目的はプライバシーポリシーで公表していれば足り、
-                    同意チェックからリンクも張っているためです。<strong>プライバシーポリシーのURLが未設定のあいだは、
-                    オフにしていても自動で表示します</strong>（利用目的がどこにも無い状態を作らないため）。<br><br>
-                    営業案内メールを送る予定があるときだけオンにしてください。オンにすると、そのチェックが<strong>同意の証拠</strong>になります（特定電子メール法）。<br>
-                    <strong>オフのままなら、お客様に読ませる同意は「個人情報の取り扱い」の1つだけで済みます。</strong>送る予定のない同意を求めても、読む項目が増えるだけです。
-                </p>
-            </td></tr></table>
             </div>
 
             <div class="fhs-tabpanel" data-tab="mail" style="display:none">
@@ -1408,9 +1392,11 @@ function eaf_settings_page() {
                     </p>
                 </td></tr>
                 <tr><th>到達確認</th><td>
-                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=eaf_test_mail'), 'eaf_test_mail')); ?>" class="button">テストメールを自分宛に送信</a>
+                    <input type="email" id="eaf-test-to" value="<?php echo esc_attr(wp_get_current_user()->user_email); ?>" size="34" placeholder="送り先のメールアドレス">
+                    <a href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=eaf_test_mail'), 'eaf_test_mail')); ?>" class="button" id="eaf-test-send">このアドレスに送る</a>
                     <p class="description">
                         現在の件名・本文テンプレートでサンプルを送ります（保存してから押してください）。<br>
+                        <strong>通知先メール（担当者）のアドレスを入れて試すのがおすすめです。</strong>実際に受け取る人に届くかどうかが分かります。<br>
                         <strong>迷惑メールに入る場合</strong>は「WP Mail SMTP」等でSMTP送信にし、送信ドメインの <code>SPF</code> / <code>DKIM</code> / <code>DMARC</code> を設定してください。
                     </p>
                 </td></tr>
@@ -1761,13 +1747,13 @@ function eaf_settings_page() {
             <h3>問い合わせ後の動き</h3>
             <ol>
                 <li>メール入力があったお客様に<strong>受付完了メール</strong>を自動返信（内容は「自動返信メール」タブで編集可）</li>
-                <li><strong>通知先メール（担当者）</strong>に問い合わせ内容を通知（営業連絡の可否つき）</li>
+                <li><strong>通知先メール（担当者）</strong>に問い合わせ内容を通知</li>
                 <li>担当者がお客様へ連絡し、日程・見積りをご案内</li>
             </ol>
 
             <h3 style="color:#b32d2e">法的な注意</h3>
             <p class="description" style="max-width:900px">
-                このフォームは<strong>自社対応の前提</strong>で作られており、同意文にも「第三者に提供することはありません」と明記されます。
+                このフォームは<strong>自社対応の前提</strong>で作られています。
                 集めたお名前・電話番号を<strong>同意なく他社に渡すのは違法です</strong>（個情法27条）。
                 公開前に弁護士等の確認を推奨します。
             </p>
@@ -1841,6 +1827,20 @@ function eaf_settings_page() {
         /* ショートコードのコピーボタン。
            管理画面が https でないと navigator.clipboard が使えないため、
            その場合は選択＋execCommand に落とす（社内の http 環境でも動くように）。 */
+        /* テストメールの宛先。リンクに載せてから飛ばす */
+        (function(){
+            var to = document.getElementById('eaf-test-to');
+            var go = document.getElementById('eaf-test-send');
+            if (!to || !go) return;
+            var base = go.getAttribute('href');
+            function sync(){
+                var v = to.value.trim();
+                go.setAttribute('href', v ? base + '&to=' + encodeURIComponent(v) : base);
+            }
+            to.addEventListener('input', sync);
+            sync();
+        })();
+
         document.querySelectorAll('.fhs-copy').forEach(function(btn){
             btn.addEventListener('click', function(){
                 var src = btn.closest('tr').querySelector('.fhs-copy-src');
@@ -1921,9 +1921,9 @@ function eaf_leads_page() {
     $dberr = get_option('eaf_last_db_error');
     if ($dberr) echo '<div class="notice notice-error"><p><strong>直近に保存エラーが発生しました：</strong> ' . esc_html($dberr) . '<br>最新版に更新すると自動修復を試みます。解消されない場合は、この赤いメッセージの文面を共有してください。</p></div>';
     echo '<p>反響件数：' . $total . ' 件（表示は最新200件）　<a class="button button-primary" href="' . esc_url($export) . '">CSVエクスポート（Excel）</a></p>';
-    echo '<p class="description">個人情報を含みます。CSVの取り扱いにご注意ください。「営業可」が空欄のお客様には、今回の申し込みへの対応以外の営業メールを送らないでください。</p>';
+    echo '<p class="description">個人情報を含みます。CSVの取り扱いにご注意ください。</p>';
     echo '<table class="widefat striped"><thead><tr>';
-    echo '<th>受付日時</th><th>お名前</th><th>電話</th><th>メール</th><th>工事内容</th><th>市町村</th><th>建物</th><th>時期</th><th>詳細</th><th>営業可</th><th>操作</th></tr></thead><tbody>';
+    echo '<th>受付日時</th><th>お名前</th><th>電話</th><th>メール</th><th>工事内容</th><th>市町村</th><th>建物</th><th>時期</th><th>詳細</th><th>操作</th></tr></thead><tbody>';
     if ($rows) foreach ($rows as $r) {
         $plabel = isset($GLOBALS['EAF_PTYPE_LABEL'][$r->ptype]) ? $GLOBALS['EAF_PTYPE_LABEL'][$r->ptype] : $r->ptype;
         $det = isset($r->details) ? (string)$r->details : '';
@@ -1941,7 +1941,7 @@ function eaf_leads_page() {
             esc_html($g(isset($r->building) ? $r->building : '')),
             esc_html($g(isset($r->timing) ? $r->timing : '')),
             esc_html($det !== '' ? $det : '-'),
-            $r->marketing_opt_in ? '○' : '', esc_url($del));
+            esc_url($del));
     } else echo '<tr><td colspan="11">まだありません</td></tr>';
     echo '</tbody></table></div>';
 }
@@ -1961,8 +1961,8 @@ function eaf_export_leads() {
     header('Content-Disposition: attachment; filename="eamber_oiawase.csv"');
     $out = fopen('php://output', 'w');
     if (!$can_sjis) fwrite($out, "\xEF\xBB\xBF");
-    $head = array('ID','受付日時','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','営業同意','送信元ページ');
-    $cols = array('id','created_at','name','kana','tel','email','contact_time','ptype','address','building','ownership','timing','detail','details','marketing_opt_in','page_url');
+    $head = array('ID','受付日時','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','送信元ページ');
+    $cols = array('id','created_at','name','kana','tel','email','contact_time','ptype','address','building','ownership','timing','detail','details','page_url');
     $sjis = function ($s) use ($can_sjis) {
         return $can_sjis ? mb_convert_encoding((string)$s, 'SJIS-win', 'UTF-8') : (string)$s;
     };
@@ -1972,7 +1972,6 @@ function eaf_export_leads() {
         foreach ($cols as $c) {
             $v = isset($r[$c]) ? $r[$c] : '';
             if ($c === 'ptype' && isset($GLOBALS['EAF_PTYPE_LABEL'][$v])) $v = $GLOBALS['EAF_PTYPE_LABEL'][$v];
-            if ($c === 'marketing_opt_in') $v = $v ? '同意あり' : '同意なし';
             $line[] = $sjis(eaf_csv_safe($v));
         }
         fputcsv($out, $line);
@@ -2035,7 +2034,6 @@ function eaf_ajax() {
     /* どの記事から来たか。どの記事が反響を生んでいるかを後から見られるようにする */
     $page_url  = esc_url_raw((string) wp_unslash($_POST['page_url'] ?? ''));
     $agree   = !empty($_POST['agree']);
-    $mkt     = eaf_flag('show_marketing', false) && !empty($_POST['marketing']);
 
     $errors = array();
     if (!$agree) $errors[] = '個人情報の取扱いへの同意が必要です。';
@@ -2154,7 +2152,6 @@ function eaf_ajax() {
         'ptype'      => $ptype,
         'address'    => eaf_trim_len($address, 255),
         'details'    => implode("\n", $detail_lines),
-        'marketing_opt_in' => $mkt ? 1 : 0,
         'page_url'   => eaf_trim_len($page_url, 255),
         'sheet_sent' => 0,
     );
@@ -2199,7 +2196,6 @@ function eaf_ajax() {
         'city'    => $address,
         'customer_details' => $customer_details,
         'property_details' => $property_details,
-        'marketing' => $mkt,
     );
 
     // 受付完了メール（お客様へ）。メール未入力なら送らない（折り返しは電話で行う）
@@ -2327,7 +2323,6 @@ function eaf_form_css() {
     .fhs-wrap button:disabled{opacity:.6;cursor:wait;filter:none}
     /* ハニーポット：display:none だと一部のボットに読まれるため画面外へ逃がす */
     .fhs-hp{position:absolute!important;left:-9999px!important;top:auto;width:1px;height:1px;overflow:hidden}
-    .fhs-privacy-note{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:9px;padding:13px 15px;font-size:14px;color:#4b5563;line-height:1.75;margin-top:16px}
     .fhs-err{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;padding:10px 12px;border-radius:9px;margin-bottom:10px;font-size:16px}
     .fhs-spec{width:100%;border-collapse:collapse;margin:16px 0;font-size:17px}
     .fhs-spec th,.fhs-spec td{border-bottom:1px solid var(--fhs-line);padding:12px 10px;text-align:left}
@@ -2965,14 +2960,14 @@ function eaf_sheet_gas_code() {
         "    if (sh.getLastRow() === 0) {",
         "      sh.appendRow(['受付日時','工事内容','市町村','お名前','フリガナ','電話番号','メール',",
         "                    '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
-        "                    '症状・ご希望','詳細','営業同意','送信元ページ','ID']);",
+        "                    '症状・ご希望','詳細','送信元ページ','ID']);",
         "    }",
         "    // ★列は固定。フォームで項目を出す/隠すを切り替えても列はずれない。",
         "    //   隠している項目はその列が空になるだけ。",
         "    sh.appendRow([",
         "      data.created_at, data.ptype, data.address, data.name, data.kana, data.tel, data.email,",
         "      data.contact_time, data.building, data.ownership, data.timing,",
-        "      data.detail, data.details, data.marketing, data.page_url, data.id",
+        "      data.detail, data.details, data.page_url, data.id",
         "    ]);",
         "    return out({ ok: true });",
         "  } catch (err) {",
@@ -3013,7 +3008,6 @@ function eaf_sheet_payload($r) {
         'timing'     => isset($r['timing']) ? $r['timing'] : '',
         'detail'     => isset($r['detail']) ? $r['detail'] : '',
         'details'    => isset($r['details']) ? $r['details'] : '',
-        'marketing'  => !empty($r['marketing_opt_in']) ? '同意あり' : '同意なし',
         'page_url'   => isset($r['page_url']) ? $r['page_url'] : '',
     );
 }
@@ -3158,7 +3152,7 @@ function eaf_sheet_test() {
         'name' => 'テスト 太郎', 'kana' => '', 'tel' => '090-0000-0000',
         'email' => '', 'contact_time' => '', 'building' => '', 'ownership' => '',
         'timing' => '', 'detail' => 'これは接続の確認用の行です。削除して構いません。',
-        'details' => '', 'marketing' => '同意なし', 'page_url' => home_url('/'),
+        'details' => '', 'page_url' => home_url('/'),
     ));
     if ($r === true) eaf_sheet_error('');
     else eaf_sheet_error($r);
@@ -3272,7 +3266,6 @@ function eaf_shortcode($atts = array()) {
     // compact では必須項目だけに絞る（メインビジュアル横などに収めるため）
     $cust_fields = eaf_visible_fields('customer',  eaf_customer_fields(),  $compact);
     $situ_fields = eaf_visible_fields('situation', eaf_situation_fields(), $compact);
-    $show_mkt    = eaf_flag('show_marketing', false) && !$compact;
 
     /* ステップは2つだけ:「お困りの内容（概要）→ ご連絡先（個人情報）」。
        画面を増やすほど離脱するため、聞くことは1画面目にまとめ、個人情報は必ず最後に置く。
@@ -3550,32 +3543,11 @@ function eaf_shortcode($atts = array()) {
       <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email">
       <div class="fhs-hint">ご入力いただくと、受付内容の控えをメールでお送りします</div>
 
-      <?php /* 個人情報の利用目的（個情法21条）。
-               ★プライバシーポリシーで公表していれば、フォーム上での再掲は必須ではない。
-                 同意チェックにリンクがあるので、既定では出さずに読む量を減らす。
-               ★ただしプライバシーポリシーのURLが未設定のときは必ず出す。
-                 消したうえにリンクも無いと、利用目的がどこにも無い状態になるため。 */ ?>
-<?php if (eaf_flag('show_privacy_note', false) || !$privacy): ?>
-      <div class="fhs-privacy-note">
-        <strong>個人情報の取り扱いについて</strong><br>
-        ご入力いただいた内容は、<?php echo esc_html($op_name); ?>が<strong>お問い合わせへの対応とご連絡、およびそれに関するご案内</strong>のために利用します。<br>
-        ご本人の同意なく第三者に提供することはありません。<br>
-        削除をご希望の場合は、<?php echo $privacy
-            ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>に記載の窓口'
-            : '当社の窓口'; ?>までお申し付けください。
-      </div>
-<?php endif; ?>
 
       <div class="fhs-check">
         <input type="checkbox" name="agree" id="<?php echo esc_attr($uid . '-agree'); ?>" value="1" required>
         <label for="<?php echo esc_attr($uid . '-agree'); ?>"><?php echo $agree_label; ?></label>
       </div>
-<?php if ($show_mkt): ?>
-      <div class="fhs-check">
-        <input type="checkbox" name="marketing" id="<?php echo esc_attr($uid . '-mkt'); ?>" value="1">
-        <label for="<?php echo esc_attr($uid . '-mkt'); ?>">工事・メンテナンスに関するご案内やお役立ち情報のメール受け取りを希望します（任意）</label>
-      </div>
-<?php endif; ?>
 <?php if ($compact): ?>
       <input type="hidden" name="compact" value="1">
 <?php endif; ?>

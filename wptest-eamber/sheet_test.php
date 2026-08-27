@@ -39,8 +39,9 @@ $p = eaf_sheet_payload($row);
 t('工事内容は表示名にする', $p['ptype'], '住宅の配線・電気工事全般');
 t('合言葉が入る',           $p['secret'], 'aiko-2026');
 t('市町村',                 $p['address'], '北杜市');
-t('営業同意は文字で',       $p['marketing'], '同意なし');
 t('送信元ページも送る',     $p['page_url'], 'https://example.test/a/');
+/* 営業案内メールの機能は廃止したので、その列は送らない */
+t('営業同意は送らない',     array_key_exists('marketing', $p), false);
 
 /* --- 3. 実際の送信 --- */
 fake_posts_reset();
@@ -110,7 +111,7 @@ preg_match('/sh\.appendRow\(\[\s*
 $head_n = preg_match_all("/'[^']*'/", $h[1]);          // 見出しの個数
 $val_n  = preg_match_all('/data\.[a-z_]+/', $v[1]);    // 書き込む値の個数
 t('見出しの数と値の数が合う', $head_n, $val_n);
-t('列は16', $head_n, 16);
+t('列は15', $head_n, 15);
 
 /* --- 8. 設定画面に連携タブがある --- */
 $GLOBALS['FAKE_IS_ADMIN'] = true;

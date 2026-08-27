@@ -61,10 +61,11 @@ t('電話も1回だけ',          substr_count($dup, '055-000-0000'), 1);
 t('本文の中身は残る',       strpos($dup, 'ご案内です。') !== false, true);
 t('「お問い合わせ:」の残骸が出ない', strpos($dup, 'お問い合わせ: 055') !== false, false);
 
-/* --- 5. 同意文の主語も会社名（サイト名） --- */
+/* --- 5. 会社名はメール署名だけで使う（フォーム本体には出さない） --- */
 set_opts($co);
 $html = eaf_shortcode(array());
-t('利用目的の主語が会社名', strpos($html, '株式会社e.Amberが<strong>お問い合わせへの対応とご連絡') !== false, true);
+t('フォームに会社紹介を出さない', strpos($html, 'fhs-operator') !== false, false);
+t('個人情報の説明文も出さない',   strpos($html, 'fhs-privacy-note') !== false, false);
 
 /* --- 6. 自己診断 --- */
 t('自己診断: 検査が空振りしていない', strpos($mail, '───') !== false, true);

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.4.1
+ * Version: 1.5.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.4.1');
+define('EAF_VER', '1.5.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -302,6 +302,8 @@ function eaf_activate() {
         detail VARCHAR(2000) NULL,
         timing VARCHAR(50) NULL,
         marketing_opt_in TINYINT(1) DEFAULT 0,
+        page_url VARCHAR(255) NULL,
+        sheet_sent TINYINT(1) DEFAULT 0,
         PRIMARY KEY  (id)
     ) $charset;";
     require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -330,6 +332,8 @@ function eaf_ensure_columns() {
     $cols = $wpdb->get_col("SHOW COLUMNS FROM `$t`", 0);
     if (!is_array($cols)) return;
     $need = array(
+        'page_url'   => 'VARCHAR(255) NULL',
+        'sheet_sent' => 'TINYINT(1) DEFAULT 0',
         'address' => 'VARCHAR(255) NULL',
         'details' => 'LONGTEXT NULL',
         'ptype'   => 'VARCHAR(20) NULL',
@@ -600,6 +604,11 @@ function eaf_sanitize_options($in) {
         // 見出し・ボタン
         'lead_text'        => sanitize_textarea_field($in['lead_text'] ?? ''),
         'city_hint'        => sanitize_text_field($in['city_hint'] ?? ''),
+        /* スプレッドシート連携（Google Apps Script のウェブアプリ宛にPOSTする） */
+        'sheet_on'         => !empty($in['sheet_on']) ? '1' : '0',
+        'sheet_url'        => esc_url_raw($in['sheet_url'] ?? ''),
+        'sheet_secret'     => sanitize_text_field($in['sheet_secret'] ?? ''),
+        'sheet_view_url'   => esc_url_raw($in['sheet_view_url'] ?? ''),
         // 装飾（色）
         'color_brand'      => sanitize_hex_color($in['color_brand'] ?? '')    ?: '#1E3050',
         // 空欄ならブランドカラーを使う（ボタンだけ目立つ色にしたい場合に指定）
@@ -610,6 +619,8 @@ function eaf_sanitize_options($in) {
         'color_tel_bg'     => sanitize_hex_color($in['color_tel_bg'] ?? '')   ?: '#F1F3F7',
         'color_tel_bd'     => sanitize_hex_color($in['color_tel_bd'] ?? '')   ?: '#DCE2EB',
         'color_tel_fg'     => sanitize_hex_color($in['color_tel_fg'] ?? '')   ?: '#1E3050',
+        'color_next'       => sanitize_hex_color($in['color_next'] ?? '')     ?: '#EFC24A',
+        'show_privacy_note' => !empty($in['show_privacy_note']) ? '1' : '0',
     );
     // 各項目のモード（必須／任意／非表示）。スキーマを回して必ず明示値を保存する
     foreach (eaf_all_groups() as $g => $flds) {
@@ -1173,6 +1184,7 @@ function eaf_settings_page() {
             <a href="#" class="nav-tab" data-tab="fields">入力項目</a>
             <a href="#" class="nav-tab" data-tab="mail">自動返信メール</a>
             <a href="#" class="nav-tab" data-tab="style">デザイン</a>
+            <a href="#" class="nav-tab" data-tab="link">連携</a>
             <a href="#" class="nav-tab" data-tab="usage">ショートコード</a>
         </h2>
         <form method="post" action="options.php">
@@ -1325,8 +1337,12 @@ function eaf_settings_page() {
 
             <h4 style="margin:26px 0 6px">そのほかの欄</h4>
             <table class="form-table"><tr><th>表示する項目</th><td>
+                <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_privacy_note]" value="1" <?php checked(eaf_flag('show_privacy_note', false)); ?>> 「個人情報の取り扱いについて」の説明文</label><br>
                 <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_marketing]" value="1" <?php checked(eaf_flag('show_marketing', false)); ?>> 「営業案内メールを希望」チェック欄（★既定はオフ）</label>
                 <p class="description">
+                    <strong>個人情報の説明文は既定でオフです。</strong>利用目的はプライバシーポリシーで公表していれば足り、
+                    同意チェックからリンクも張っているためです。<strong>プライバシーポリシーのURLが未設定のあいだは、
+                    オフにしていても自動で表示します</strong>（利用目的がどこにも無い状態を作らないため）。<br><br>
                     営業案内メールを送る予定があるときだけオンにしてください。オンにすると、そのチェックが<strong>同意の証拠</strong>になります（特定電子メール法）。<br>
                     <strong>オフのままなら、お客様に読ませる同意は「個人情報の取り扱い」の1つだけで済みます。</strong>送る予定のない同意を求めても、読む項目が増えるだけです。
                 </p>
@@ -1466,8 +1482,111 @@ function eaf_settings_page() {
                 <tr><th>文字色</th><td><?php echo eaf_color_field('color_tel_fg', '#1E3050'); ?>
                     <p class="description">メッセージ・電話番号・サブメッセージに使われます（サブは少し薄く表示）。</p></td></tr>
             </table>
+
+            <h3>次に入力する欄の色</h3>
+            <table class="form-table">
+                <tr><th>点滅の色</th><td><?php echo eaf_color_field('color_next', '#EFC24A'); ?>
+                    <p class="description">
+                        「次はここ」と知らせるために、入力すべき欄がゆっくり点滅します。その色です。<br>
+                        ブランドカラーと同じにすると画面に馴染みすぎて気づかれないので、<strong>初期値は薄い黄色</strong>にしています。<br>
+                        <span class="description">※動きを減らす設定の端末では点滅せず、色の枠だけが出ます。</span>
+                    </p></td></tr>
+            </table>
             <p class="description">初期値：ブランド <code>#1E3050</code> ／ ボタン <code>#E8A33D</code> ／ ボタン文字 <code>#1E3050</code> ／ 見出し <code>#1E3050</code> ／ バッジ <code>#E8A33D</code><br>
                 空欄のまま保存すると初期値に戻ります。</p>
+            </div>
+
+            <div class="fhs-tabpanel" data-tab="link" style="display:none">
+            <h3>スプレッドシートへの転記</h3>
+            <p class="description" style="max-width:900px">
+                反響が届くたびに、Googleスプレッドシートへ1行ずつ追記します。<br>
+                <strong>受付そのものは転記の成否に左右されません。</strong>転記できなかった分はWordPress側に残り、下の「未転記」から送り直せます。
+            </p>
+<?php
+            $sheet_unsent = eaf_sheet_unsent_count();
+            $sheet_err    = get_option('eaf_sheet_last_error');
+            if (isset($_GET['sheettest'])) {
+                $ok = ($_GET['sheettest'] === '1');
+                echo '<div class="notice notice-' . ($ok ? 'success' : 'error') . '"><p>'
+                   . ($ok ? '転記できました。スプレッドシートに「（動作確認）」の行が増えているか見てください。'
+                          : '転記できませんでした。下の「直近のエラー」を確認してください。')
+                   . '</p></div>';
+            }
+            if (isset($_GET['resent'])) {
+                echo '<div class="notice notice-info"><p>'
+                   . intval($_GET['resent']) . ' 件を送り直しました。'
+                   . (intval($_GET['resentng']) ? '途中で失敗したため中断しています。' : '')
+                   . '</p></div>';
+            }
+?>
+            <table class="form-table">
+                <tr><th>転記する</th><td>
+                    <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[sheet_on]" value="1" <?php checked(eaf_flag('sheet_on', false)); ?>> 反響が届いたらスプレッドシートに追記する</label>
+                    <p class="description">オフのあいだは何も送りません。設定を済ませてからオンにしてください。</p>
+                </td></tr>
+                <tr><th>合言葉</th><td>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[sheet_secret]" value="<?php echo esc_attr(eaf_opt('sheet_secret')); ?>" size="40" placeholder="例：eamber-2026-yamanashi">
+                    <p class="description">
+                        <strong>他人があなたのシートに書き込むのを防ぐための合言葉です。</strong>下のスクリプトにも同じ文字列が自動で入ります。<br>
+                        英数字とハイフンで10文字以上を推奨します。<strong>変えたら、スクリプトを貼り直してください。</strong>
+                    </p>
+                </td></tr>
+                <tr><th>転記先のURL</th><td>
+                    <input type="url" name="<?php echo EAF_OPT; ?>[sheet_url]" value="<?php echo esc_attr(eaf_opt('sheet_url')); ?>" size="70" placeholder="https://script.google.com/macros/s/.../exec">
+                    <p class="description">スクリプトを「ウェブアプリ」として公開したときに出るURL（末尾が <code>/exec</code>）。</p>
+                </td></tr>
+                <tr><th>スプレッドシートのURL</th><td>
+                    <input type="url" name="<?php echo EAF_OPT; ?>[sheet_view_url]" value="<?php echo esc_attr(eaf_opt('sheet_view_url')); ?>" size="70" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
+<?php if (eaf_opt('sheet_view_url')): ?>
+                    <a class="button" href="<?php echo esc_url(eaf_opt('sheet_view_url')); ?>" target="_blank" rel="noopener">開く</a>
+<?php endif; ?>
+                    <p class="description">ここから開くためだけの控えです。転記には使いません。</p>
+                </td></tr>
+            </table>
+
+            <h4 style="margin:26px 0 6px">つなぎ方</h4>
+            <ol style="max-width:900px;line-height:2">
+                <li>上の<strong>合言葉</strong>を決めて「変更を保存」を押す（下のスクリプトに反映されます）</li>
+                <li>スプレッドシートを開き、<strong>拡張機能 → Apps Script</strong> を選ぶ</li>
+                <li>出てきたコードを全部消して、下のスクリプトを<strong>貼り付けて保存</strong></li>
+                <li><strong>デプロイ → 新しいデプロイ → 種類「ウェブアプリ」</strong>を選び、<br>
+                    <strong>次のユーザーとして実行＝自分</strong>／<strong>アクセスできるユーザー＝全員</strong> にしてデプロイ</li>
+                <li>表示された<strong>ウェブアプリのURL</strong>を、上の「転記先のURL」に貼って保存</li>
+                <li>「転記する」をオンにして保存し、下の<strong>接続テスト</strong>を押す</li>
+            </ol>
+            <p class="description" style="max-width:900px">
+                ※「アクセスできるユーザー＝全員」に不安を感じるかもしれませんが、URLは推測できない文字列で、
+                さらに<strong>合言葉が一致しない書き込みは弾かれます</strong>。この設定でないとWordPressから書き込めません。
+            </p>
+
+            <table class="widefat striped fhs-recipes" style="max-width:980px;margin-top:12px">
+                <thead><tr><th style="width:180px">貼り付けるスクリプト</th><th>内容</th><th style="width:90px"></th></tr></thead>
+                <tbody>
+                <tr>
+                    <td><strong>Apps Script</strong><br><span class="description">合言葉が埋め込み済み</span></td>
+                    <td><code class="fhs-copy-src" style="white-space:pre;display:block;max-height:260px;overflow:auto"><?php echo esc_html(eaf_sheet_gas_code()); ?></code></td>
+                    <td><button type="button" class="button fhs-copy">コピー</button></td>
+                </tr>
+                </tbody>
+            </table>
+
+            <h4 style="margin:26px 0 6px">状態</h4>
+            <table class="form-table">
+                <tr><th>接続テスト</th><td>
+                    <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=eaf_sheet_test'), 'eaf_sheet_test')); ?>">テストの1行を送る</a>
+                    <p class="description">保存してから押してください。シートに「（動作確認）」の行が増えれば成功です。その行は消して構いません。</p>
+                </td></tr>
+                <tr><th>未転記</th><td>
+                    <strong style="font-size:15px"><?php echo (int) $sheet_unsent; ?> 件</strong>
+<?php if ($sheet_unsent > 0): ?>
+                    　<a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=eaf_sheet_resend'), 'eaf_sheet_resend')); ?>">まとめて送る（最大50件）</a>
+<?php endif; ?>
+                    <p class="description">転記できていない反響の数です。WordPress側には残っているので失われていません。</p>
+                </td></tr>
+                <tr><th>直近のエラー</th><td>
+                    <?php echo $sheet_err ? '<code>' . esc_html($sheet_err) . '</code>' : '<span class="description">ありません。</span>'; ?>
+                </td></tr>
+            </table>
             </div>
 
             <div class="fhs-tabpanel" data-tab="usage" style="display:none">
@@ -1779,8 +1898,8 @@ function eaf_export_leads() {
     header('Content-Disposition: attachment; filename="eamber_oiawase.csv"');
     $out = fopen('php://output', 'w');
     if (!$can_sjis) fwrite($out, "\xEF\xBB\xBF");
-    $head = array('ID','受付日時','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','営業同意');
-    $cols = array('id','created_at','name','kana','tel','email','contact_time','ptype','address','building','ownership','timing','detail','details','marketing_opt_in');
+    $head = array('ID','受付日時','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','営業同意','送信元ページ');
+    $cols = array('id','created_at','name','kana','tel','email','contact_time','ptype','address','building','ownership','timing','detail','details','marketing_opt_in','page_url');
     $sjis = function ($s) use ($can_sjis) {
         return $can_sjis ? mb_convert_encoding((string)$s, 'SJIS-win', 'UTF-8') : (string)$s;
     };
@@ -1850,6 +1969,8 @@ function eaf_ajax() {
     // 防ぐため、生の入力が空かどうかを先に控えておき、形式エラーはエラーとして返す
     $email_raw = trim((string) wp_unslash($_POST['email'] ?? ''));
     $email     = sanitize_email($email_raw);
+    /* どの記事から来たか。どの記事が反響を生んでいるかを後から見られるようにする */
+    $page_url  = esc_url_raw((string) wp_unslash($_POST['page_url'] ?? ''));
     $agree   = !empty($_POST['agree']);
     $mkt     = eaf_flag('show_marketing', false) && !empty($_POST['marketing']);
 
@@ -1971,6 +2092,8 @@ function eaf_ajax() {
         'address'    => eaf_trim_len($address, 255),
         'details'    => implode("\n", $detail_lines),
         'marketing_opt_in' => $mkt ? 1 : 0,
+        'page_url'   => eaf_trim_len($page_url, 255),
+        'sheet_sent' => 0,
     );
     // 個別カラムを持つ項目（お名前・電話番号など）を、カラム長に丸めて格納
     $lens = eaf_lead_columns();
@@ -1996,6 +2119,13 @@ function eaf_ajax() {
         )));
     }
     delete_option('eaf_last_db_error');   // 初回・リトライを問わず、保存に成功したらエラー記録を消す
+
+    /* ★スプレッドシートへの転記。失敗しても受付は止めない。
+       転記できなかった分は sheet_sent=0 のまま残り、設定画面からまとめて送り直せる。 */
+    if (eaf_sheet_ready()) {
+        $row['id'] = (int) $wpdb->insert_id;
+        eaf_sheet_send_row($row);
+    }
 
     $ctx = array(
         'name'  => isset($cust['name']) ? $cust['name']['val'] : '',
@@ -2061,8 +2191,11 @@ function eaf_form_css() {
     $c_tel_bg    = eaf_opt('color_tel_bg', '#F1F3F7');
     $c_tel_bd    = eaf_opt('color_tel_bd', '#DCE2EB');
     $c_tel_fg    = eaf_opt('color_tel_fg', '#1E3050');
+    /* 次に入力する欄の点滅。ブランド色だと灰色っぽく沈んで気づきにくいので別に持つ */
+    $c_next      = eaf_opt('color_next', '#EFC24A');
+    $c_next_rgb  = eaf_hex_to_rgb($c_next);
     ob_start(); ?>
-    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-tel-bg:<?php echo esc_attr($c_tel_bg); ?>;--fhs-tel-bd:<?php echo esc_attr($c_tel_bd); ?>;--fhs-tel-fg:<?php echo esc_attr($c_tel_fg); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75;font-size:17px}
+    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-tel-bg:<?php echo esc_attr($c_tel_bg); ?>;--fhs-tel-bd:<?php echo esc_attr($c_tel_bd); ?>;--fhs-tel-fg:<?php echo esc_attr($c_tel_fg); ?>;--fhs-next-rgb:<?php echo esc_attr($c_next_rgb); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75;font-size:17px}
     /* テーマ側が box-sizing を当てているかどうかで、余白ぶん高さ・幅がずれる。
        このフォームの中だけは border-box に固定して、どのテーマでも同じ見た目にする。 */
     .fhs-wrap,.fhs-wrap *{box-sizing:border-box}
@@ -2149,13 +2282,13 @@ function eaf_form_css() {
     .fhs-design-compact .fhs-spec th,.fhs-design-compact .fhs-spec td{padding:9px 8px}
 
     /* 次に入力すべき欄をハイライト */
-    .fhs-wrap select.fhs-next,.fhs-wrap input.fhs-next,.fhs-wrap textarea.fhs-next{border-color:rgba(var(--fhs-brand-rgb),.55);animation:fhsPulse 1.5s ease-in-out infinite}
+    .fhs-wrap select.fhs-next,.fhs-wrap input.fhs-next,.fhs-wrap textarea.fhs-next{border-color:rgba(var(--fhs-next-rgb),.85);animation:fhsPulse 1.5s ease-in-out infinite}
     @keyframes fhsPulse{
-      0%,100%{box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.16)}
-      50%{box-shadow:0 0 0 7px rgba(var(--fhs-brand-rgb),.28)}
+      0%,100%{box-shadow:0 0 0 3px rgba(var(--fhs-next-rgb),.28)}
+      50%{box-shadow:0 0 0 7px rgba(var(--fhs-next-rgb),.45)}
     }
     @media (prefers-reduced-motion:reduce){
-      .fhs-wrap select.fhs-next,.fhs-wrap input.fhs-next,.fhs-wrap textarea.fhs-next{animation:none;box-shadow:0 0 0 3px rgba(var(--fhs-brand-rgb),.20)}
+      .fhs-wrap select.fhs-next,.fhs-wrap input.fhs-next,.fhs-wrap textarea.fhs-next{animation:none;box-shadow:0 0 0 3px rgba(var(--fhs-next-rgb),.38)}
     }
 
     /* デザイン: card */
@@ -2261,7 +2394,8 @@ function eaf_form_css() {
     /* タグは四角・線なしの塗りだけ。バッジ（丸い塗り）と形を変えて、並んでもくどくならないようにする */
     .fhs-ttag{font-size:12px;font-weight:700;color:var(--fhs-brand);background:rgba(var(--fhs-brand-rgb),.10);border:0;border-radius:5px;padding:6px 11px;line-height:1.3;white-space:nowrap}
     .fhs-tbadge{display:inline-block;background:var(--fhs-badge-bg);border:1px solid var(--fhs-badge-bg);color:#fff;font-size:12px;font-weight:700;border-radius:999px;padding:5px 14px;line-height:1}
-    .fhs-tnote{color:var(--fhs-muted);font-size:12px;margin-top:12px;line-height:1.8;text-align:center;text-wrap:pretty}
+    .fhs-tnote{color:var(--fhs-muted);font-size:12px;margin-top:10px;line-height:1.8;text-align:center;text-wrap:pretty}
+    .fhs-design-teaser .fhs-tcol-side .fhs-tnote{margin-top:8px}
     .fhs-tnote span{display:block}
     .fhs-admin-warn{background:#fdecea;border:1px solid #f5c6cb;color:#c0392b;padding:12px 14px;border-radius:9px;font-size:14px;margin-bottom:12px;line-height:1.8}
     /* 自動で拾えている場合は「エラー」ではないので、色を落とす */
@@ -2618,6 +2752,7 @@ function eaf_form_js() {
     fd.append('action', 'eamber_form');
     fd.append('nonce', NONCE);
     fd.append('eaf_elapsed', String(Date.now() - LOADED_AT));   // 表示から送信までの経過ms（ボット判定）
+    fd.append('page_url', location.href);                       // どの記事から来たか
 
     /* ページキャッシュで古いnonceが配られていると 403 になる。
        その場合だけ新しいnonceを取り直して1回だけ送り直す。 */
@@ -2728,6 +2863,182 @@ function eaf_enqueue_assets() {
         wp_enqueue_script('eamber-form');
         wp_add_inline_script('eamber-form', eaf_form_js());
     }
+}
+
+/* =========================================================================
+ * 10d. スプレッドシートへの転記
+ *
+ * Google Apps Script のウェブアプリ宛にPOSTする方式。
+ * ★Sheets API を直接叩く形にしないのは、サービスアカウントの鍵をWordPressに
+ *   置くことになり、管理も漏えい時の被害も重くなるため。
+ *   GAS ならスプレッドシート側に閉じており、合言葉だけで守れる。
+ * ★転記に失敗しても、受付そのものは絶対に止めない（反響を落とすほうが損）。
+ *   代わりに sheet_sent を0のままにして、あとからまとめて送り直せるようにする。
+ * ======================================================================= */
+
+/**
+ * スプレッドシート側に貼り付けてもらうスクリプト。
+ * ★合言葉を埋め込んだ状態で出す。手で書き写させると必ず食い違う。
+ */
+function eaf_sheet_gas_code() {
+    $secret = (string) eaf_opt('sheet_secret', '');
+    $lines = array(
+        "// e.Amber 反響フォーム → このスプレッドシートへ転記",
+        "// 貼り付けたら「デプロイ > 新しいデプロイ > 種類: ウェブアプリ」で公開してください。",
+        "//   次のユーザーとして実行: 自分",
+        "//   アクセスできるユーザー: 全員",
+        "",
+        "const SECRET = " . wp_json_encode($secret) . ";",
+        "",
+        "function doPost(e) {",
+        "  try {",
+        "    const data = JSON.parse(e.postData.contents);",
+        "    if (SECRET && data.secret !== SECRET) return out({ ok: false, error: 'secret' });",
+        "    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];",
+        "    if (sh.getLastRow() === 0) {",
+        "      sh.appendRow(['受付日時','工事内容','市町村','お名前','電話番号','メール',",
+        "                    '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
+        "                    '症状・ご希望','詳細','営業同意','送信元ページ','ID']);",
+        "    }",
+        "    sh.appendRow([",
+        "      data.created_at, data.ptype, data.address, data.name, data.tel, data.email,",
+        "      data.contact_time, data.building, data.ownership, data.timing,",
+        "      data.detail, data.details, data.marketing, data.page_url, data.id",
+        "    ]);",
+        "    return out({ ok: true });",
+        "  } catch (err) {",
+        "    return out({ ok: false, error: String(err) });",
+        "  }",
+        "}",
+        "",
+        "function out(o) {",
+        "  return ContentService.createTextOutput(JSON.stringify(o))",
+        "    .setMimeType(ContentService.MimeType.JSON);",
+        "}",
+    );
+    return implode(PHP_EOL, $lines);
+}
+
+/** 連携が使える状態か */
+function eaf_sheet_ready() {
+    return eaf_flag('sheet_on', false) && eaf_opt('sheet_url', '') !== '';
+}
+
+/** 1件ぶんの送信内容を組み立てる */
+function eaf_sheet_payload($r) {
+    $r = (array) $r;
+    $pt = isset($r['ptype']) ? $r['ptype'] : '';
+    return array(
+        'secret'     => (string) eaf_opt('sheet_secret', ''),
+        'id'         => isset($r['id']) ? (int) $r['id'] : 0,
+        'created_at' => isset($r['created_at']) ? $r['created_at'] : '',
+        'ptype'      => isset($GLOBALS['EAF_PTYPE_LABEL'][$pt]) ? $GLOBALS['EAF_PTYPE_LABEL'][$pt] : $pt,
+        'address'    => isset($r['address']) ? $r['address'] : '',
+        'name'       => isset($r['name']) ? $r['name'] : '',
+        'kana'       => isset($r['kana']) ? $r['kana'] : '',
+        'tel'        => isset($r['tel']) ? $r['tel'] : '',
+        'email'      => isset($r['email']) ? $r['email'] : '',
+        'contact_time' => isset($r['contact_time']) ? $r['contact_time'] : '',
+        'building'   => isset($r['building']) ? $r['building'] : '',
+        'ownership'  => isset($r['ownership']) ? $r['ownership'] : '',
+        'timing'     => isset($r['timing']) ? $r['timing'] : '',
+        'detail'     => isset($r['detail']) ? $r['detail'] : '',
+        'details'    => isset($r['details']) ? $r['details'] : '',
+        'marketing'  => !empty($r['marketing_opt_in']) ? '同意あり' : '同意なし',
+        'page_url'   => isset($r['page_url']) ? $r['page_url'] : '',
+    );
+}
+
+/**
+ * 1件送る。成功なら true、失敗なら理由の文字列。
+ * ★受付の途中で呼ぶので待ち時間は短く。転記が遅れても受付は先に完了させる。
+ */
+function eaf_sheet_send($payload) {
+    $url = eaf_opt('sheet_url', '');
+    if ($url === '') return '転記先のURLが未設定です。';
+    $res = wp_remote_post($url, array(
+        'timeout'     => 8,
+        'redirection' => 5,            // GASのウェブアプリは別ドメインへ転送される
+        'headers'     => array('Content-Type' => 'application/json; charset=utf-8'),
+        'body'        => wp_json_encode($payload),
+    ));
+    if (is_wp_error($res)) return $res->get_error_message();
+    $code = (int) wp_remote_retrieve_response_code($res);
+    $body = (string) wp_remote_retrieve_body($res);
+    if ($code !== 200) return 'HTTP ' . $code . ' が返りました。' . eaf_trim_len($body, 120);
+    $j = json_decode($body, true);
+    if (is_array($j) && empty($j['ok'])) {
+        $why = isset($j['error']) ? $j['error'] : '理由不明';
+        return ($why === 'secret') ? '合言葉が一致しません（スクリプト側の SECRET を確認してください）。'
+                                   : 'スクリプト側でエラー: ' . eaf_trim_len($why, 120);
+    }
+    return true;
+}
+
+/** 直近の連携エラーを控える（値が混ざりうるので autoload には載せない） */
+function eaf_sheet_error($msg) {
+    if ($msg === '') { delete_option('eaf_sheet_last_error'); return; }
+    $msg = eaf_trim_len((string) $msg, 300) . ' @ ' . current_time('mysql');
+    if (get_option('eaf_sheet_last_error') === false) add_option('eaf_sheet_last_error', $msg, '', 'no');
+    else update_option('eaf_sheet_last_error', $msg, 'no');
+}
+
+/** 保存済みの1件を送って、成功したら転記済みにする */
+function eaf_sheet_send_row($row) {
+    $ok = eaf_sheet_send(eaf_sheet_payload($row));
+    if ($ok === true) {
+        global $wpdb;
+        $wpdb->update($wpdb->prefix . 'eamber_form_leads', array('sheet_sent' => 1),
+                      array('id' => (int) $row['id']));
+        eaf_sheet_error('');
+        return true;
+    }
+    eaf_sheet_error($ok);
+    return $ok;
+}
+
+/** まだ転記できていない件数 */
+function eaf_sheet_unsent_count() {
+    global $wpdb;
+    $t = $wpdb->prefix . 'eamber_form_leads';
+    if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $t)) !== $t) return 0;
+    return (int) $wpdb->get_var("SELECT COUNT(*) FROM `$t` WHERE sheet_sent = 0");
+}
+
+add_action('admin_post_eaf_sheet_test', 'eaf_sheet_test');
+function eaf_sheet_test() {
+    if (!current_user_can('manage_options')) wp_die('権限がありません');
+    check_admin_referer('eaf_sheet_test');
+    $r = eaf_sheet_send(array(
+        'secret' => (string) eaf_opt('sheet_secret', ''),
+        'id' => 0, 'created_at' => current_time('mysql'),
+        'ptype' => '（動作確認）エアコン', 'address' => '甲府市',
+        'name' => 'テスト 太郎', 'kana' => '', 'tel' => '090-0000-0000',
+        'email' => '', 'contact_time' => '', 'building' => '', 'ownership' => '',
+        'timing' => '', 'detail' => 'これは接続の確認用の行です。削除して構いません。',
+        'details' => '', 'marketing' => '同意なし', 'page_url' => home_url('/'),
+    ));
+    if ($r === true) eaf_sheet_error('');
+    else eaf_sheet_error($r);
+    wp_safe_redirect(admin_url('admin.php?page=eamber-form&sheettest=' . ($r === true ? '1' : '0')));
+    exit;
+}
+
+add_action('admin_post_eaf_sheet_resend', 'eaf_sheet_resend');
+function eaf_sheet_resend() {
+    if (!current_user_can('manage_options')) wp_die('権限がありません');
+    check_admin_referer('eaf_sheet_resend');
+    global $wpdb;
+    $t = $wpdb->prefix . 'eamber_form_leads';
+    /* 一度に全部送るとGAS側の上限に当たるので、古い順に少しずつ */
+    $rows = $wpdb->get_results("SELECT * FROM `$t` WHERE sheet_sent = 0 ORDER BY id ASC LIMIT 50", ARRAY_A);
+    $ok = 0; $ng = 0;
+    foreach ((array) $rows as $row) {
+        if (eaf_sheet_send_row($row) === true) $ok++;
+        else { $ng++; break; }   // 1件失敗したら以降も同じ理由で失敗する。無駄打ちしない
+    }
+    wp_safe_redirect(admin_url('admin.php?page=eamber-form&resent=' . $ok . '&resentng=' . $ng));
+    exit;
 }
 
 /* =========================================================================
@@ -2978,6 +3289,17 @@ function eaf_shortcode($atts = array()) {
         </div>
       </div>
 <?php
+      /* ★注記はボタンに掛かる文なので、ボタンと同じ列に置く。
+         カードの全幅に流すと、左のタイルの下に取り残されて何に掛かるか分からなくなる。 */
+      $render_tnote = function () use ($t_note_lines) {
+          ob_start(); ?>
+      <div class="fhs-tnote">
+<?php     foreach ($t_note_lines as $ln): ?>
+        <span><?php echo esc_html($ln); ?></span>
+<?php     endforeach; ?>
+      </div>
+<?php     return ob_get_clean();
+      };
       /* ★工事内容のタイルは3行ぶんの高さになるのに、市町村は1行しかない。
          同じ行に並べると右側が大きく空く。市町村とボタンを右の列にまとめ、
          ボタンを列の下端に寄せて、左右の高さを揃える。 */
@@ -2993,22 +3315,16 @@ function eaf_shortcode($atts = array()) {
 <?php   foreach ($t_side as $tk) { echo $render_teaser_field($tk, $t_reg[$tk], $ti++, $uid); } ?>
           <div class="fhs-tcta">
             <button class="fhs-submit" type="submit"><?php echo esc_html($btn); ?></button>
+            <?php echo $render_tnote(); ?>
           </div>
         </div>
 <?php else: ?>
 <?php   foreach ($t_fields as $tk) { echo $render_teaser_field($tk, $t_reg[$tk], $ti++, $uid); } ?>
         <div class="fhs-tcta">
           <button class="fhs-submit" type="submit"><?php echo esc_html($btn); ?></button>
+          <?php echo $render_tnote(); ?>
         </div>
 <?php endif; ?>
-      </div>
-      <?php /* 注記は文ごとに行を分ける。1つの段落にすると幅によって
-               「…送信されませ／ん。」のように中途半端な位置で折り返してしまう。
-               note属性では | で行を区切れる。 */ ?>
-      <div class="fhs-tnote">
-<?php foreach ($t_note_lines as $ln): ?>
-        <span><?php echo esc_html($ln); ?></span>
-<?php endforeach; ?>
       </div>
           </form>
 <?php else: /* ===== 通常のフォーム ===== */ ?>
@@ -3092,8 +3408,12 @@ function eaf_shortcode($atts = array()) {
       <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email">
       <div class="fhs-hint">ご入力いただくと、受付内容の控えをメールでお送りします</div>
 
-      <?php /* 個人情報の利用目的の明示（個情法21条）。同意を求める直前に必ず出す。
-               プライバシーポリシーURLが未設定でも、最低限ここで目的が伝わるようにしておく。 */ ?>
+      <?php /* 個人情報の利用目的（個情法21条）。
+               ★プライバシーポリシーで公表していれば、フォーム上での再掲は必須ではない。
+                 同意チェックにリンクがあるので、既定では出さずに読む量を減らす。
+               ★ただしプライバシーポリシーのURLが未設定のときは必ず出す。
+                 消したうえにリンクも無いと、利用目的がどこにも無い状態になるため。 */ ?>
+<?php if (eaf_flag('show_privacy_note', false) || !$privacy): ?>
       <div class="fhs-privacy-note">
         <strong>個人情報の取り扱いについて</strong><br>
         ご入力いただいた内容は、<?php echo esc_html($op_name); ?>が<strong>お問い合わせへの対応とご連絡、およびそれに関するご案内</strong>のために利用します。<br>
@@ -3102,6 +3422,7 @@ function eaf_shortcode($atts = array()) {
             ? '<a href="' . esc_url($privacy) . '" target="_blank" rel="noopener">プライバシーポリシー</a>に記載の窓口'
             : '当社の窓口'; ?>までお申し付けください。
       </div>
+<?php endif; ?>
 
       <div class="fhs-check">
         <input type="checkbox" name="agree" id="<?php echo esc_attr($uid . '-agree'); ?>" value="1" required>

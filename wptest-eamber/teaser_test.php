@@ -38,6 +38,10 @@ t('左はタイルだけ',        has($main, 'fhs-tile-input') && !has($main, 'n
 t('右に市町村がある',      has($side, 'name="address"'), true);
 t('右にボタンがある',      has($side, 'fhs-submit'), true);
 t('ボタンは市町村より後ろ', strpos($side, 'name="address"') < strpos($side, 'fhs-submit'), true);
+/* ★注記はボタンに掛かる文。カード全幅に流すと左のタイルの下に取り残される */
+t('注記も右の列にある',    has($side, 'fhs-tnote'), true);
+t('注記はボタンより後ろ',  strpos($side, 'fhs-submit') < strpos($side, 'fhs-tnote'), true);
+t('注記はタイル側に無い',  has($main, 'fhs-tnote'), false);
 
 /* --- 2. 高さを揃える仕掛けがCSSに入っている --- */
 t('右列を下まで伸ばす',    has($css, '.fhs-design-teaser .fhs-trow-split{align-items:stretch}'), true);
@@ -53,6 +57,7 @@ $noTile = eaf_shortcode(array('design' => 'teaser', 'url' => '/contact/', 'field
 t('タイルが無ければ分割しない', has($noTile, 'fhs-trow-split'), false);
 t('その場合も項目は出る',       has($noTile, 'name="address"') && has($noTile, 'name="situation_timing"'), true);
 t('その場合もボタンは出る',     has($noTile, 'fhs-submit'), true);
+t('その場合も注記は出る',       has($noTile, 'fhs-tnote'), true);
 
 /* --- 5. 本フォームには列分割を持ち込まない --- */
 $main_form = eaf_shortcode(array());

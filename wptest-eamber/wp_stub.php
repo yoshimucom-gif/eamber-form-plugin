@@ -288,6 +288,7 @@ function wp_mail($to, $subject, $body, $headers = array()) {
 class FakeWpdb {
     public $prefix = 'wp_';
     public $last_error = '';
+    public $insert_id = 0;   /* 本物と同じく、直前のinsertで振られたIDを持つ */
     /** テーブル定義: table => array(col => array('type'=>..., 'len'=>int|null)) */
     private function tables() { $s = fake_state(); return $s['tables']; }
     private function put_tables($t) { fake_set('tables', $t); }
@@ -344,7 +345,8 @@ class FakeWpdb {
         if (preg_match('/SELECT COUNT\(\*\) FROM (\S+)/i', $sql, $m)) {
             $rows = $this->rows();
             $t = trim($m[1], '`');
-            return isset($rows[$t]) ? count($rows[$t]) : 0;
+            $list = isset($rows[$t]) ? $rows[$t] : array();
+            return count($this->apply_where($list, $sql));
         }
         return null;
     }
@@ -357,14 +359,50 @@ class FakeWpdb {
         return array();
     }
 
+    /** WHERE の単純な等値条件だけ拾う（この検証環境で使う範囲に限る） */
+    private function apply_where($list, $sql) {
+        if (!preg_match('/WHERE\s+(.+?)(?:\s+ORDER\s+BY|\s+LIMIT|$)/is', $sql, $w)) return $list;
+        if (!preg_match_all("/([a-zA-Z0-9_]+)\s*=\s*'?([^'\s]+)'?/", $w[1], $cs, PREG_SET_ORDER)) return $list;
+        foreach ($cs as $c) {
+            $k = $c[1]; $v = $c[2];
+            $list = array_values(array_filter($list, function ($r) use ($k, $v) {
+                return isset($r[$k]) && (string) $r[$k] === (string) $v;
+            }));
+        }
+        return $list;
+    }
+
     public function get_results($sql, $mode = OBJECT) {
         if (!preg_match('/FROM\s+`?([a-zA-Z0-9_]+)`?/i', $sql, $m)) return array();
         $rows = $this->rows();
         $t = $m[1];
         $list = isset($rows[$t]) ? $rows[$t] : array();
-        usort($list, function ($a, $b) { return $b['id'] - $a['id']; });   // ORDER BY id DESC
+        $list = $this->apply_where($list, $sql);
+        $asc = (bool) preg_match('/ORDER\s+BY\s+id\s+ASC/i', $sql);
+        usort($list, function ($a, $b) use ($asc) { return $asc ? $a['id'] - $b['id'] : $b['id'] - $a['id']; });
         if (preg_match('/LIMIT\s+(\d+)/i', $sql, $lm)) $list = array_slice($list, 0, (int)$lm[1]);
         return $mode === ARRAY_A ? $list : array_map(function ($r) { return (object)$r; }, $list);
+    }
+
+    public function get_row($sql, $mode = OBJECT) {
+        $r = $this->get_results($sql, ARRAY_A);
+        if (!$r) return null;
+        return $mode === ARRAY_A ? $r[0] : (object) $r[0];
+    }
+
+    public function update($table, $data, $where) {
+        $rows = $this->rows();
+        if (empty($rows[$table])) return 0;
+        $n = 0;
+        foreach ($rows[$table] as $i => $r) {
+            $hit = true;
+            foreach ($where as $k => $v) if (!isset($r[$k]) || (string) $r[$k] !== (string) $v) $hit = false;
+            if (!$hit) continue;
+            foreach ($data as $k => $v) $rows[$table][$i][$k] = $v;
+            $n++;
+        }
+        $this->put_rows($rows);
+        return $n;
     }
 
     /** ★本番同様に「未知カラム」「長さ超過」で失敗させる */
@@ -393,6 +431,7 @@ class FakeWpdb {
         $row['id'] = $next;
         $rows[$table][] = $row;
         $this->put_rows($rows);
+        $this->insert_id = $next;
         $this->last_error = '';
         return 1;
     }
@@ -425,7 +464,22 @@ function wp_send_json($data) {
 if (!function_exists('wp_remote_get')) {
 function wp_remote_get($url, $args = array()) { return new WP_Error('no-net', 'disabled in test'); }
 }
+/* ---------------- 外部への送信（実際には出さず、内容を控える） ---------------- */
+if (!function_exists('wp_remote_post')) {
+function wp_remote_post($url, $args = array()) {
+    $GLOBALS['FAKE_POSTS'][] = array('url' => $url, 'args' => $args);
+    if (isset($GLOBALS['FAKE_POST_RESPONSE'])) {
+        $r = $GLOBALS['FAKE_POST_RESPONSE'];
+        return is_callable($r) ? call_user_func($r, $url, $args) : $r;
+    }
+    return array('code' => 200, 'body' => '{"ok":true}');
+}
+}
+function fake_posts()       { return isset($GLOBALS['FAKE_POSTS']) ? $GLOBALS['FAKE_POSTS'] : array(); }
+function fake_posts_reset() { $GLOBALS['FAKE_POSTS'] = array(); unset($GLOBALS['FAKE_POST_RESPONSE']); }
+
 function is_wp_error($t) { return ($t instanceof WP_Error); }
-class WP_Error { public $code; public $msg; function __construct($c = '', $m = '') { $this->code = $c; $this->msg = $m; } }
-if (!function_exists('wp_remote_retrieve_response_code')) { function wp_remote_retrieve_response_code($r) { return 0; } }
-if (!function_exists('wp_remote_retrieve_body')) { function wp_remote_retrieve_body($r) { return ''; } }
+class WP_Error { public $code; public $msg; function __construct($c = '', $m = '') { $this->code = $c; $this->msg = $m; }
+    public function get_error_message() { return $this->msg; } }
+if (!function_exists('wp_remote_retrieve_response_code')) { function wp_remote_retrieve_response_code($r) { return is_array($r) && isset($r['code']) ? (int) $r['code'] : 0; } }
+if (!function_exists('wp_remote_retrieve_body')) { function wp_remote_retrieve_body($r) { return is_array($r) && isset($r['body']) ? (string) $r['body'] : ''; } }

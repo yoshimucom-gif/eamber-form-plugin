@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.6.0
+ * Version: 1.7.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.6.0');
+define('EAF_VER', '1.7.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -2716,6 +2716,7 @@ function eaf_form_js() {
         if (miss[0].focus) miss[0].focus();
         return;
       }
+      eafTrack('form_step_next', { step: stepNow + 1 });
       showStep(stepNow + 1);
       wrap.scrollIntoView({ behavior:'smooth', block:'start' });
     });
@@ -2786,6 +2787,15 @@ function eaf_form_js() {
 
   function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
 
+  /* GA4へイベントを送る。gtagが無ければdataLayerに積むだけで、計測が無いサイトでも何も壊さない */
+  function eafTrack(name, params){
+    try {
+      var p = params || {};
+      if (typeof window.gtag === 'function') { window.gtag('event', name, p); }
+      else if (window.dataLayer && window.dataLayer.push) { p.event = name; window.dataLayer.push(p); }
+    } catch (err) { /* 計測失敗でフォーム本体を止めない */ }
+  }
+
   form.addEventListener('submit', function(e){
     e.preventDefault();
 
@@ -2801,6 +2811,10 @@ function eaf_form_js() {
         errBox.innerHTML = '<div class="fhs-err">遷移先のページが設定されていません。サイト管理者にお知らせください。</div>';
         return;
       }
+      eafTrack('teaser_click', {
+        form_design: (wrap.className.match(/fhs-design-(teaser[a-z-]*)/) || [null, 'teaser'])[1],
+        link_url: TARGET
+      });
       window.location.href = TARGET;
       return;
     }
@@ -2848,6 +2862,7 @@ function eaf_form_js() {
           errBox.scrollIntoView({ behavior:'smooth', block:'center' });   // 画面外だと「無反応」に見えて連打される
           return;
         }
+        eafTrack('contact_submit', {});
         renderResult(d);
       })
       .catch(function(){

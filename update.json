@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.6.0\n・「個人情報の取り扱いについて」の説明文と「営業案内メールを希望」チェック欄を廃止しました。お客様に読ませる同意はプライバシーポリシーの1つだけになります\n・それに伴い、反響一覧・CSV・スプレッドシートから「営業同意」の列をなくしました\n・テストメールの宛先を指定できるようにしました。通知先（担当者）のアドレスで試せます"
+    "changelog": "1.7.0\n・GA4のイベント計測を追加しました。ティザーの送信＝teaser_click、2ステップフォームの「次へ進む」＝form_step_next（step番号つき）、お問い合わせ送信の完了＝contact_submit。gtag/GTMが入っていないサイトでは何もせず、フォームの動作にも影響しません"
   }
 }

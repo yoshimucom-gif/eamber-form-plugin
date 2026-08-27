@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.7.0",
+  "version": "1.6.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.7.0\n・GA4のイベント計測を追加しました。ティザーの送信＝teaser_click、2ステップフォームの「次へ進む」＝form_step_next（step番号つき）、お問い合わせ送信の完了＝contact_submit。gtag/GTMが入っていないサイトでは何もせず、フォームの動作にも影響しません"
+    "changelog": "1.6.1\n・通知先メールをカンマ区切りで複数指定できるようにしました\n・送信元メールを空欄にしたとき、wordpress@（サイトのドメイン）を差出人として明示するようにしました。受信できるメールアドレスは不要です\n・送信元にGmailを入れている場合の案内を、実情に合わせて書き直しました"
   }
 }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.7.0
+ * Version: 1.6.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.7.0');
+define('EAF_VER', '1.6.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -531,7 +531,7 @@ add_action('admin_notices', function () {
        . '<strong>反響そのものは「反響一覧」に保存されています</strong>ので、まずはそちらをご確認ください。<br>'
        . ($free
            ? '差出人が <strong>' . esc_html($free) . '</strong> になっています。これが原因の可能性が高いです。'
-             . 'サイトと同じドメインのアドレスに変えるか、空欄にしてください。'
+             . '「送信元メール」を<strong>空欄</strong>にしてお試しください。'
            : '「基本設定」タブでテストメールを送ると、原因の見当が付きます。')
        . ' <a href="' . esc_url(admin_url('admin.php?page=eamber-form')) . '">設定を開く</a></p></div>';
 });
@@ -598,7 +598,8 @@ function eaf_sanitize_options($in) {
         'operator_address' => sanitize_text_field($in['operator_address'] ?? ''),
         'operator_email'   => sanitize_email($in['operator_email'] ?? ''),
         'from_email'       => sanitize_email($in['from_email'] ?? ''),
-        'notify_email'     => sanitize_email($in['notify_email'] ?? ''),
+        /* 複数指定できる（カンマ区切り）。CF7では2つのGmailに送っていた */
+        'notify_email'     => eaf_sanitize_email_list($in['notify_email'] ?? ''),
         'privacy_url'      => esc_url_raw($in['privacy_url'] ?? ''),
         // チェックボックス（未送信＝OFF。'' ではなく明示的に '0' を入れて区別する）
         'notify_on'        => !empty($in['notify_on'])      ? '1' : '0',
@@ -663,9 +664,8 @@ $GLOBALS['EAF_PTYPE_LABEL'] = array(
        記事台帳286本のうち22本がこの領域で、「◯◯市 電気工事」の主要な受け皿でもある。 */
     'wiring'   => '住宅の配線・電気工事全般',
     'business' => '店舗・事務所・工場の設備',
-    /* ★最大の流入は「電気工事を頼みたい」までしか決まっていない層。
-       ここを「その他」という格下の逃げ道にすると、その層が選びづらくなる。 */
-    'other'    => 'まだ決まっていない・相談したい',
+    /* ★2026-08-27 吉村さん指示で「まだ決まっていない」から「その他」系へ変更。 */
+    'other'    => 'その他のお問い合わせ',
 );
 
 /* タイル選択用の短い表記（タイルに長い正式名を入れると2行に折れて選びにくいため） */
@@ -1090,7 +1090,7 @@ function eaf_test_mail() {
         'property_details' => "■ 工事内容 : エアコン（取り付け・修理）\n■ 現場の市町村 : 甲府市\n■ 建物の種類 : 戸建て\n■ ご希望の作業 : 入れ替えたい\n■ 設置する階 : 2階\n■ 専用コンセントの有無 : 分からない",
     );
     $headers = array('Content-Type: text/plain; charset=UTF-8');
-    $from = eaf_opt('from_email'); $site = eaf_opt('site_name', '株式会社e.Amber');
+    $from = eaf_from_address(); $site = eaf_opt('site_name', '株式会社e.Amber');
     if ($from) $headers[] = 'From: ' . $site . ' <' . $from . '>';
     $ok = wp_mail($to, '[テスト] ' . eaf_mail_subject(), eaf_mail_body($ctx), $headers);
     wp_safe_redirect(admin_url('admin.php?page=eamber-form&testmail=' . ($ok ? '1' : '0') . '&to=' . rawurlencode($to)));
@@ -1165,12 +1165,13 @@ function eaf_settings_page() {
                 ($tm_ok
                     ? 'テストメールを <strong>' . esc_html($tm_to) . '</strong> に送信しました。届かない場合は<strong>迷惑メールフォルダ</strong>も確認してください（届かない＝SPF/DKIM未設定の可能性大）。'
                     : 'テストメールを送れませんでした。<strong>心当たりの多い順に</strong>：<br>'
-                      . '① <strong>「送信元メール」にGmailなどのフリーメールを入れていないか。</strong>'
-                      . '差出人はサイトと同じドメイン（例：<code>info@kai-denkou.com</code>）にしてください。'
-                      . 'Gmailを差出人にすると、そのドメインの送信許可にこのサーバーが入っていないため拒否されます。'
+                      . '① <strong>「送信元メール」を空欄にして、もう一度試す。</strong>'
+                      . '<code>' . esc_html(eaf_from_address()) . '</code> として送られます。'
+                      . '受信できるメールボックスは不要で、これがいちばん確実です。<br>'
+                      . '② 差出人に<strong>Gmailなどのフリーメールを入れていないか。</strong>'
+                      . 'gmail.com から送ってよいサーバーにこのサーバーが入っていないため拒否されます。'
+                      . 'Gmailを差出人にしたい場合は「WP Mail SMTP」等でGmail経由の送信に切り替えてください。'
                       . '<strong>受け取り側（通知先メール）がGmailなのは問題ありません。</strong><br>'
-                      . '② 送信元メールを<strong>空欄</strong>にして、もう一度試す（WordPressの既定の差出人になります）。'
-                      . 'これで送れるなら①が原因です。<br>'
                       . '③ それでも送れない場合はサーバーがメールを送れない状態です。'
                       . '「WP Mail SMTP」などのプラグインで、実際のメールアカウント経由の送信に切り替えてください。') .
                 '</p></div>';
@@ -1232,23 +1233,34 @@ function eaf_settings_page() {
                     <p class="description">受付完了メールの末尾の署名に載ります（任意）。</p></td></tr>
                 <tr><th>送信元メール</th><td><input type="email" name="<?php echo EAF_OPT; ?>[from_email]" value="<?php echo esc_attr(eaf_opt('from_email')); ?>" size="40" placeholder="<?php echo esc_attr(get_option('admin_email')); ?>">
                     <p class="description">
-                        お客様に届く受付完了メールの<strong>差出人</strong>です。<br>
-                        <strong>必ずサイトと同じドメインのアドレスにしてください</strong>（例：<code>info@kai-denkou.com</code>）。
-                        空欄ならWordPressの既定の差出人になります。<br>
-                        <span class="description">※ここに<strong>Gmailなどのフリーメールを入れると送れません。</strong>
-                        そのドメインの送信許可にこのサーバーが入っていないためです。受け取り用にGmailを使うのは問題ありません（下の「通知先メール」）。</span>
+                        お客様に届く受付完了メールの<strong>差出人</strong>です。
+                        <strong>空欄のままで構いません。</strong>その場合
+                        <code><?php echo esc_html(eaf_from_address()); ?></code> として送ります。<br>
+                        <strong>受信できるメールボックスは不要です。</strong>送信専用の表記で、このドメインの送信許可に
+                        サーバーが入っているため確実に届きます（Contact Form 7 でも同じ形で運用されていました）。<br>
+                        <span class="description">※<strong>Gmailなどのフリーメールを差出人にすると届きません。</strong>
+                        gmail.com から送ってよいサーバーにこのサーバーが入っていないためです。
+                        どうしてもGmailを差出人にしたい場合は、「WP Mail SMTP」等で
+                        <strong>Gmailアカウント経由の送信</strong>に切り替える必要があります。<br>
+                        <strong>受け取りにGmailを使うのは全く問題ありません</strong>（下の「通知先メール」）。</span>
                     </p>
 <?php $eaf_free = eaf_free_mail_domain(eaf_opt('from_email')); if ($eaf_free): ?>
                     <p class="description" style="color:#b32d2e"><strong>差出人が <?php echo esc_html($eaf_free); ?> になっています。</strong>
-                        このままではメールが送れないか、届いても迷惑メール扱いになります。
-                        サイトと同じドメインのアドレスに変えるか、空欄にしてください。</p>
+                        「WP Mail SMTP」等で<?php echo esc_html($eaf_free); ?>経由の送信を設定していない場合、
+                        メールは送れないか、届いても迷惑メール扱いになります。<br>
+                        <strong>いちばん簡単なのは、この欄を空欄にすることです</strong>（<code><?php echo esc_html(eaf_from_address()); ?></code> として送られます）。</p>
 <?php endif; ?></td></tr>
                 <tr><th>通知先メール（担当者）</th><td>
                     <input type="email" name="<?php echo EAF_OPT; ?>[notify_email]" value="<?php echo esc_attr(eaf_opt('notify_email')); ?>" size="40"><br>
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[notify_on]" value="1" <?php checked(eaf_flag('notify_on', true)); ?>> 申し込みが届いたら通知する</label>
                     <p class="description">
                         反響が届いたことを知らせる<strong>受け取り先</strong>です。<strong>Gmailで構いません。</strong><br>
-                        空欄なら送信元メール（無ければ管理者アドレス）に通知します。<strong>工事の問い合わせは急ぎのお客様が多いので、通知は必ずONを推奨します。</strong>
+                        <strong>カンマで区切れば複数に送れます。</strong>
+                        例：<code>yamanashi.kaidenkou@gmail.com, yoshimu.com@gmail.com</code><br>
+                        空欄なら管理者アドレスに通知します。<strong>工事の問い合わせは急ぎのお客様が多いので、通知は必ずONを推奨します。</strong>
+<?php $eaf_nt = eaf_notify_list(); if (count($eaf_nt) > 1): ?>
+                        <br><strong>いまは <?php echo count($eaf_nt); ?> 件の宛先に送ります。</strong>
+<?php endif; ?>
                     </p></td></tr>
                 <tr><th>フォーム冒頭の案内文</th><td>
                     <textarea name="<?php echo EAF_OPT; ?>[lead_text]" rows="3" style="width:100%;max-width:760px"><?php echo esc_textarea(eaf_opt('lead_text')); ?></textarea>
@@ -2200,20 +2212,20 @@ function eaf_ajax() {
 
     // 受付完了メール（お客様へ）。メール未入力なら送らない（折り返しは電話で行う）
     $site = eaf_opt('site_name', '株式会社e.Amber');
-    $from = eaf_opt('from_email');
+    $from = eaf_from_address();
     $headers = array('Content-Type: text/plain; charset=UTF-8');
     if ($from) $headers[] = 'From: ' . $site . ' <' . $from . '>';
     $mail_ok = ($email !== '') ? wp_mail($email, eaf_mail_subject(), eaf_mail_body($ctx), $headers) : false;
 
-    // 担当者通知
+    // 担当者通知（複数宛に送れる）
     if (eaf_flag('notify_on', true)) {
-        $notify = eaf_opt('notify_email', $from ?: get_option('admin_email'));
+        $notify = eaf_notify_list();
         if ($notify) {
             $subj = '【お問い合わせ】' . $label . ' / ' . $address . ($ctx['name'] !== '' ? ' / ' . $ctx['name'] . '様' : '');
             if (wp_mail($notify, $subj, eaf_admin_notify_body($ctx), $headers)) {
                 delete_option('eaf_notify_failed');
             } else {
-                eaf_notify_failed($notify);
+                eaf_notify_failed(implode(', ', $notify));
             }
         }
     }
@@ -3038,6 +3050,37 @@ function eaf_sheet_payload($r) {
  *   サーバー側が送信前に弾いて wp_mail が false を返すこともある。
  *   受け取り（通知先）にGmailを使うのは全く問題ない。差出人だけの話。
  */
+function eaf_sanitize_email_list($raw) {
+    $out = array();
+    foreach (preg_split('/[,、\s]+/u', (string) $raw) as $e) {
+        $e = sanitize_email(trim($e));
+        if ($e !== '' && is_email($e)) $out[] = $e;
+    }
+    return implode(', ', array_values(array_unique($out)));
+}
+
+/** 通知先を配列で返す（未設定なら差出人→管理者アドレスの順に落とす） */
+function eaf_notify_list() {
+    $raw = eaf_opt('notify_email', '');
+    if ($raw === '') $raw = (string) get_option('admin_email');
+    $list = array_filter(array_map('trim', explode(',', $raw)), 'strlen');
+    return array_values($list);
+}
+
+/**
+ * 差出人アドレス。空欄なら WordPress の既定と同じ wordpress@ドメイン を使う。
+ * ★受信できるメールボックスは要らない。送信専用の表記でよく、
+ *   このドメインの送信許可にサーバーが入っているので確実に届く。
+ *   （Contact Form 7 でも wordpress@ドメイン を差出人にして運用していた）
+ */
+function eaf_from_address() {
+    $from = eaf_opt('from_email', '');
+    if ($from !== '') return $from;
+    $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
+    $host = preg_replace('/^www\./i', '', $host);
+    return $host !== '' ? 'wordpress@' . $host : '';
+}
+
 function eaf_free_mail_domain($email) {
     $email = strtolower(trim((string) $email));
     if ($email === '' || strpos($email, '@') === false) return '';

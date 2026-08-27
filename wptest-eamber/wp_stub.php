@@ -200,6 +200,7 @@ function wp_die($m = '') {
 function admin_url($p = '') { return '/wp-admin/' . ltrim($p, '/'); }
 /** テスト用: $GLOBALS['FAKE_HOME_URL'] で http/https を切り替えられる */
 function home_url($p = '') { return ($GLOBALS['FAKE_HOME_URL'] ?? 'https://example.test') . $p; }
+if (!function_exists('wp_parse_url')) { function wp_parse_url($url, $c = -1) { return parse_url($url, $c); } }
 function site_url($p = '') { return home_url($p); }
 function plugin_basename($f) { return basename(dirname($f)) . '/' . basename($f); }
 function plugin_dir_path($f) { return dirname($f) . '/'; }

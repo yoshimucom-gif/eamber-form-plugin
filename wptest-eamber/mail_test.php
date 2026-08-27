@@ -35,6 +35,29 @@ t('送信ボタンがある',     strpos($page, 'id="eaf-test-send"') !== false,
 t('入力値をURLに載せる',  strpos($page, "'&to=' + encodeURIComponent") !== false, true);
 t('「自分宛」固定の文言をやめた', strpos($page, 'テストメールを自分宛に送信') !== false, false);
 
+/* --- 差出人の既定：ドメインの送信専用アドレス（メールボックス不要） --- */
+$GLOBALS['FAKE_HOME_URL'] = 'https://www.kai-denkou.com';
+update_option(EAF_OPT, eaf_sanitize_options(array()));
+t('空欄なら wordpress@ドメイン', eaf_from_address(), 'wordpress@kai-denkou.com');
+update_option(EAF_OPT, eaf_sanitize_options(array('from_email' => 'info@kai-denkou.com')));
+t('指定があればそれを使う', eaf_from_address(), 'info@kai-denkou.com');
+
+/* --- 通知先は複数指定できる（CF7では2つのGmailに送っていた） --- */
+update_option(EAF_OPT, eaf_sanitize_options(array(
+    'notify_email' => 'yamanashi.kaidenkou@gmail.com,yoshimu.com@gmail.com')));
+t('2つとも保存される', eaf_opt('notify_email', ''),
+  'yamanashi.kaidenkou@gmail.com, yoshimu.com@gmail.com');
+t('配列で2件返る', count(eaf_notify_list()), 2);
+/* 全角読点・空白区切り・重複・壊れたものが混ざっても拾う */
+update_option(EAF_OPT, eaf_sanitize_options(array(
+    'notify_email' => 'a@x.test、 b@y.test  a@x.test こわれた')));
+t('区切りが揺れても拾う', eaf_opt('notify_email', ''), 'a@x.test, b@y.test');
+t('壊れた宛先は落とす', strpos(eaf_opt('notify_email', ''), 'こわれた') !== false, false);
+/* 未設定なら管理者アドレスに落ちる */
+update_option('admin_email', 'admin@kai-denkou.com');
+update_option(EAF_OPT, eaf_sanitize_options(array()));
+t('未設定なら管理者宛', eaf_notify_list(), array('admin@kai-denkou.com'));
+
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 @unlink($GLOBALS['FAKE_STATE_FILE']);
 exit($ng ? 1 : 0);

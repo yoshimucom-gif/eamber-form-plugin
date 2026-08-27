@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.4.0
+ * Version: 1.4.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.4.0');
+define('EAF_VER', '1.4.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -2241,6 +2241,17 @@ function eaf_form_css() {
     .fhs-design-teaser .fhs-tfield > label{margin-top:0}
     .fhs-design-teaser .fhs-tcta{flex:1 1 100%;display:flex;flex-direction:column;align-items:center}
     .fhs-design-teaser .fhs-tcta button{max-width:520px;margin-top:6px}
+    /* ★左＝タイル（3行ぶん）、右＝市町村とボタン。
+       align-items:stretch と margin-top:auto で、ボタンを右列の下端に落として
+       左右の高さを揃える。これをしないと右側が大きく空いて間の抜けた形になる。 */
+    .fhs-design-teaser .fhs-trow-split{align-items:stretch}
+    .fhs-design-teaser .fhs-tcol-main{flex:1.25 1 330px;min-width:0}
+    .fhs-design-teaser .fhs-tcol-side{flex:1 1 260px;min-width:0;display:flex;flex-direction:column}
+    .fhs-design-teaser .fhs-tcol-side .fhs-tfield{flex:0 0 auto}
+    .fhs-design-teaser .fhs-tcol-side .fhs-tcta{flex:0 0 auto;margin-top:auto;align-items:stretch}
+    .fhs-design-teaser .fhs-tcol-side .fhs-tcta button{max-width:none;margin-top:14px}
+    /* 縦積みのティザーでは列に分けず、そのまま上から並べる */
+    .fhs-design-teaser-v .fhs-tcol-side{display:flex;flex-direction:column}
     /* 横長は見出しも1行にまとめる（バッジ＋見出しを横並び。狭ければ折り返す） */
     .fhs-design-teaser .fhs-ttexts{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 14px}
     /* 見出しの上に置くバッジ（無料・秘密厳守など） */
@@ -2966,12 +2977,30 @@ function eaf_shortcode($atts = array()) {
 <?php endif; ?>
         </div>
       </div>
-      <div class="fhs-trow">
-<?php $t_reg = eaf_teaser_fields(); $ti = 1;
-      foreach ($t_fields as $tk) { echo $render_teaser_field($tk, $t_reg[$tk], $ti++, $uid); } ?>
+<?php
+      /* ★工事内容のタイルは3行ぶんの高さになるのに、市町村は1行しかない。
+         同じ行に並べると右側が大きく空く。市町村とボタンを右の列にまとめ、
+         ボタンを列の下端に寄せて、左右の高さを揃える。 */
+      $t_reg  = eaf_teaser_fields();
+      $t_main = in_array('ptype', $t_fields, true) ? 'ptype' : '';
+      $t_side = array_values(array_filter($t_fields, function ($k) { return $k !== 'ptype'; }));
+      $ti = 1;
+?>
+      <div class="fhs-trow<?php echo $t_main ? ' fhs-trow-split' : ''; ?>">
+<?php if ($t_main): ?>
+        <div class="fhs-tcol-main"><?php echo $render_teaser_field($t_main, $t_reg[$t_main], $ti++, $uid); ?></div>
+        <div class="fhs-tcol-side">
+<?php   foreach ($t_side as $tk) { echo $render_teaser_field($tk, $t_reg[$tk], $ti++, $uid); } ?>
+          <div class="fhs-tcta">
+            <button class="fhs-submit" type="submit"><?php echo esc_html($btn); ?></button>
+          </div>
+        </div>
+<?php else: ?>
+<?php   foreach ($t_fields as $tk) { echo $render_teaser_field($tk, $t_reg[$tk], $ti++, $uid); } ?>
         <div class="fhs-tcta">
           <button class="fhs-submit" type="submit"><?php echo esc_html($btn); ?></button>
         </div>
+<?php endif; ?>
       </div>
       <?php /* 注記は文ごとに行を分ける。1つの段落にすると幅によって
                「…送信されませ／ん。」のように中途半端な位置で折り返してしまう。

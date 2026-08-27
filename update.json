@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.4.0\n・【重要】記事に貼ったフォームが素のHTMLで表示される不具合を修正しました。スタイルの読み込み方をWordPressの標準的なやり方に変更しています\n・電話案内の帯の色（背景・線・文字）を選べるようにしました\n・タイル・入力欄・帯の角をさらに控えめにしました"
+    "changelog": "1.4.1\n・ティザー（記事に置く入口フォーム）の横並びを整えました。市町村と「無料で相談する」ボタンを右の列にまとめ、左のタイルと高さが揃うようにしています。右側の空きがなくなります\n・狭い画面では、これまでどおり自動で縦積みに切り替わります"
   }
 }

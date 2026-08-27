@@ -47,7 +47,9 @@ fake_posts_reset();
 t('送信は成功扱い', eaf_sheet_send($p), true);
 $sent = fake_posts();
 t('POST先が設定どおり', $sent[0]['url'], 'https://script.google.com/macros/s/AAA/exec');
-t('JSONで送る', strpos($sent[0]['args']['headers']['Content-Type'], 'application/json') === 0, true);
+/* ★GASは application/json を弾く構成があるので text/plain から試す。中身はJSONのまま */
+t('まず text/plain で試す', strpos($sent[0]['args']['headers']['Content-Type'], 'text/plain') === 0, true);
+t('中身はJSON', json_decode($sent[0]['args']['body'], true) !== null, true);
 $body = json_decode($sent[0]['args']['body'], true);
 t('本文に工事内容が入る', $body['ptype'], '住宅の配線・電気工事全般');
 t('転送を追う設定', $sent[0]['args']['redirection'] >= 1, true);
@@ -94,6 +96,21 @@ $code = eaf_sheet_gas_code();
 t('スクリプトに合言葉が埋まる', strpos($code, '"aiko-2026"') !== false, true);
 t('doPostがある',               strpos($code, 'function doPost') !== false, true);
 t('見出し行を作る',             strpos($code, '受付日時') !== false, true);
+/* ★送る項目を増やしたのにスクリプト側へ書き足し忘れると、その値は黙って消える
+     （フリガナで実際に起きた）。payload の全キーが script に出ているかを突きつける。 */
+foreach (array_keys(eaf_sheet_payload(array())) as $k) {
+    if ($k === 'secret') continue;
+    t('スクリプトが ' . $k . ' を書いている', strpos($code, 'data.' . $k) !== false, true);
+}
+/* 列は固定＝項目の出し入れでずれない。見出しの数と書き込む値の数が一致すること */
+preg_match('/sh\.appendRow\(\[(.*?)\]\);\s*\}/s', $code, $h);
+preg_match('/sh\.appendRow\(\[\s*
+(.*?)
+\s*\]\);/s', $code, $v);
+$head_n = preg_match_all("/'[^']*'/", $h[1]);          // 見出しの個数
+$val_n  = preg_match_all('/data\.[a-z_]+/', $v[1]);    // 書き込む値の個数
+t('見出しの数と値の数が合う', $head_n, $val_n);
+t('列は16', $head_n, 16);
 
 /* --- 8. 設定画面に連携タブがある --- */
 $GLOBALS['FAKE_IS_ADMIN'] = true;

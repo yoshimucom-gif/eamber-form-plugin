@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.5.0
+ * Version: 1.5.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.5.0');
+define('EAF_VER', '1.5.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1502,6 +1502,14 @@ function eaf_settings_page() {
                 反響が届くたびに、Googleスプレッドシートへ1行ずつ追記します。<br>
                 <strong>受付そのものは転記の成否に左右されません。</strong>転記できなかった分はWordPress側に残り、下の「未転記」から送り直せます。
             </p>
+            <p class="description" style="background:#f0f6fc;border-left:4px solid #2271b1;padding:10px 12px;max-width:900px">
+                <strong>あとから入力項目を増やしたり減らしたりしても、シートの列はずれません。</strong>
+                列は最初から全項目ぶん用意してあり、隠している項目はその列が空になるだけです。
+                途中で「フリガナ」を出すようにすれば、その日からフリガナの列が埋まりはじめます。<br>
+                ただし<strong>工事内容ごとの質問</strong>（設置する階・症状など）は個別の列ではなく、
+                <strong>「詳細」列にまとめて</strong>入ります。工事内容によって聞くことが変わるため、列にすると
+                ほとんど空欄の列が並んでしまうからです。
+            </p>
 <?php
             $sheet_unsent = eaf_sheet_unsent_count();
             $sheet_err    = get_option('eaf_sheet_last_error');
@@ -1534,6 +1542,11 @@ function eaf_settings_page() {
                 <tr><th>転記先のURL</th><td>
                     <input type="url" name="<?php echo EAF_OPT; ?>[sheet_url]" value="<?php echo esc_attr(eaf_opt('sheet_url')); ?>" size="70" placeholder="https://script.google.com/macros/s/.../exec">
                     <p class="description">スクリプトを「ウェブアプリ」として公開したときに出るURL（末尾が <code>/exec</code>）。</p>
+<?php if (eaf_opt('sheet_url') && !eaf_sheet_url_ok(eaf_opt('sheet_url'))): ?>
+                    <p class="description" style="color:#b32d2e"><strong>このURLの形では届きません。</strong>
+                        <code>https://script.google.com/macros/s/……/exec</code> の形（末尾が <code>/exec</code>）である必要があります。<br>
+                        よくある間違い：デプロイをテストで出る <code>/dev</code> のURL／スクリプト編集画面のURL／末尾に余計な文字が付いている。</p>
+<?php endif; ?>
                 </td></tr>
                 <tr><th>スプレッドシートのURL</th><td>
                     <input type="url" name="<?php echo EAF_OPT; ?>[sheet_view_url]" value="<?php echo esc_attr(eaf_opt('sheet_view_url')); ?>" size="70" placeholder="https://docs.google.com/spreadsheets/d/.../edit">
@@ -1585,6 +1598,17 @@ function eaf_settings_page() {
                 </td></tr>
                 <tr><th>直近のエラー</th><td>
                     <?php echo $sheet_err ? '<code>' . esc_html($sheet_err) . '</code>' : '<span class="description">ありません。</span>'; ?>
+<?php if ($sheet_err): ?>
+                    <p class="description" style="margin-top:10px">
+                        <strong>うまくいかないときに見るところ（上から順に）</strong><br>
+                        1. 転記先のURLの末尾が <code>/exec</code> になっているか（<code>/dev</code> では届きません）<br>
+                        2. デプロイのとき<strong>「アクセスできるユーザー」が「全員」</strong>になっているか<br>
+                        3. スクリプトを直したあと、<strong>デプロイし直したか</strong>（保存だけでは反映されません。
+                           「デプロイを管理」から編集して<strong>新しいバージョン</strong>を選びます）<br>
+                        4. 連携タブの合言葉と、スクリプト1行目の <code>SECRET</code> が同じか<br>
+                        5. スプレッドシートを開いた状態の Apps Script か（別プロジェクトだと別のシートに書きます）
+                    </p>
+<?php endif; ?>
                 </td></tr>
             </table>
             </div>
@@ -2896,12 +2920,14 @@ function eaf_sheet_gas_code() {
         "    if (SECRET && data.secret !== SECRET) return out({ ok: false, error: 'secret' });",
         "    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];",
         "    if (sh.getLastRow() === 0) {",
-        "      sh.appendRow(['受付日時','工事内容','市町村','お名前','電話番号','メール',",
+        "      sh.appendRow(['受付日時','工事内容','市町村','お名前','フリガナ','電話番号','メール',",
         "                    '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
         "                    '症状・ご希望','詳細','営業同意','送信元ページ','ID']);",
         "    }",
+        "    // ★列は固定。フォームで項目を出す/隠すを切り替えても列はずれない。",
+        "    //   隠している項目はその列が空になるだけ。",
         "    sh.appendRow([",
-        "      data.created_at, data.ptype, data.address, data.name, data.tel, data.email,",
+        "      data.created_at, data.ptype, data.address, data.name, data.kana, data.tel, data.email,",
         "      data.contact_time, data.building, data.ownership, data.timing,",
         "      data.detail, data.details, data.marketing, data.page_url, data.id",
         "    ]);",
@@ -2953,26 +2979,71 @@ function eaf_sheet_payload($r) {
  * 1件送る。成功なら true、失敗なら理由の文字列。
  * ★受付の途中で呼ぶので待ち時間は短く。転記が遅れても受付は先に完了させる。
  */
+/** ウェブアプリのURLの形が正しいか（ここを間違えるとHTTP 400が返る） */
+function eaf_sheet_url_ok($url) {
+    return (bool) preg_match('#^https://script\.google\.com/macros/s/[A-Za-z0-9_\-]+/exec$#', (string) $url);
+}
+
+/**
+ * Googleが返すHTMLのエラーページを、読める一文に畳む。
+ * ★そのまま出すと <!DOCTYPE html>… が並ぶだけで、何が悪いのか分からない。
+ */
+function eaf_sheet_clean_error($body) {
+    $body = (string) $body;
+    if (stripos($body, '<html') === false && stripos($body, '<!doctype') === false) {
+        return trim(preg_replace('/\s+/', ' ', $body));
+    }
+    if (preg_match('#<title>(.*?)</title>#is', $body, $m)) {
+        $t = trim(preg_replace('/\s+/', ' ', wp_strip_all_tags($m[1])));
+        if ($t !== '') return $t;
+    }
+    return trim(preg_replace('/\s+/', ' ', wp_strip_all_tags($body)));
+}
+
+/**
+ * 1件送る。成功なら true、失敗なら理由の文字列。
+ * ★受付の途中で呼ぶので待ち時間は短く。転記が遅れても受付は先に完了させる。
+ * ★Content-Type は2通り試す。GASのウェブアプリは application/json を弾く構成が
+ *   あり、その場合 text/plain なら通る。どちらでも doPost の中身は同じ。
+ */
 function eaf_sheet_send($payload) {
     $url = eaf_opt('sheet_url', '');
     if ($url === '') return '転記先のURLが未設定です。';
-    $res = wp_remote_post($url, array(
-        'timeout'     => 8,
-        'redirection' => 5,            // GASのウェブアプリは別ドメインへ転送される
-        'headers'     => array('Content-Type' => 'application/json; charset=utf-8'),
-        'body'        => wp_json_encode($payload),
-    ));
-    if (is_wp_error($res)) return $res->get_error_message();
-    $code = (int) wp_remote_retrieve_response_code($res);
-    $body = (string) wp_remote_retrieve_body($res);
-    if ($code !== 200) return 'HTTP ' . $code . ' が返りました。' . eaf_trim_len($body, 120);
-    $j = json_decode($body, true);
-    if (is_array($j) && empty($j['ok'])) {
-        $why = isset($j['error']) ? $j['error'] : '理由不明';
-        return ($why === 'secret') ? '合言葉が一致しません（スクリプト側の SECRET を確認してください）。'
-                                   : 'スクリプト側でエラー: ' . eaf_trim_len($why, 120);
+    if (!eaf_sheet_url_ok($url)) {
+        return 'URLの形が違います。「https://script.google.com/macros/s/……/exec」（末尾が /exec）を入れてください。'
+             . 'いま入っているのは ' . eaf_trim_len($url, 60);
     }
-    return true;
+    $json = wp_json_encode($payload);
+    $last = '';
+    foreach (array('text/plain;charset=utf-8', 'application/json; charset=utf-8') as $ctype) {
+        $res = wp_remote_post($url, array(
+            'timeout'     => 10,
+            'redirection' => 5,            // GASのウェブアプリは別ドメインへ転送される
+            'headers'     => array('Content-Type' => $ctype),
+            'body'        => $json,
+        ));
+        if (is_wp_error($res)) { $last = $res->get_error_message(); continue; }
+        $code = (int) wp_remote_retrieve_response_code($res);
+        $body = (string) wp_remote_retrieve_body($res);
+        if ($code === 200) {
+            $j = json_decode($body, true);
+            if (is_array($j) && empty($j['ok'])) {
+                $why = isset($j['error']) ? $j['error'] : '理由不明';
+                return ($why === 'secret')
+                    ? '合言葉が一致しません。連携タブの合言葉と、スクリプト1行目の SECRET をそろえてください（合言葉を変えたらスクリプトを貼り直します）。'
+                    : 'スクリプト側でエラー: ' . eaf_trim_len($why, 160);
+            }
+            if (!is_array($j)) {
+                /* 200だがJSONでない＝ログイン画面などが返っている */
+                $last = 'JSONが返りませんでした。' . eaf_trim_len(eaf_sheet_clean_error($body), 160);
+                continue;
+            }
+            return true;
+        }
+        $last = 'HTTP ' . $code . '（Content-Type: ' . $ctype . '）／'
+              . eaf_trim_len(eaf_sheet_clean_error($body), 160);
+    }
+    return $last;
 }
 
 /** 直近の連携エラーを控える（値が混ざりうるので autoload には載せない） */

@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.7.0\n法人（店舗・事務所・工場）を選んだときだけ、二段目のカード選択と会社名の入力に入るようにした。会社名はCSV・スプレッドシートで独立した列になる。個人の8枚を選んだ場合の手数は変わらない。"
+    "changelog": "1.7.1\nフォームに出る文言（電話案内・そのメッセージ・サブメッセージ・冒頭の案内文・市町村の補足文）を、それぞれチェックで出し分けできるようにした。文言を消さずに止められる。"
   }
 }

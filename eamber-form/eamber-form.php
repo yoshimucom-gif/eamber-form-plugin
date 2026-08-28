@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.7.0
+ * Version: 1.7.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.7.0');
+define('EAF_VER', '1.7.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -626,6 +626,14 @@ function eaf_sanitize_options($in) {
         'notify_on'        => !empty($in['notify_on'])      ? '1' : '0',
         // フォーム上に問い合わせ先（電話番号）を出すか。既定はOFF
         'step_form'        => !empty($in['step_form'])      ? '1' : '0',
+        /* ★フォームに出る文言の出し分け。空欄にして消すのではなく、
+           文言を残したまま止められるようにする（電話案内のメッセージは
+           空欄にすると既定文が出るので、そもそも空欄では消せなかった）。 */
+        'show_telbar'      => !empty($in['show_telbar'])      ? '1' : '0',
+        'show_tel_message' => !empty($in['show_tel_message']) ? '1' : '0',
+        'show_tel_sub'     => !empty($in['show_tel_sub'])     ? '1' : '0',
+        'show_lead'        => !empty($in['show_lead'])        ? '1' : '0',
+        'show_city_hint'   => !empty($in['show_city_hint'])   ? '1' : '0',
         // スパム対策
         'spam_block_link'  => !empty($in['spam_block_link'])  ? '1' : '0',
         'spam_require_ja'  => !empty($in['spam_require_ja'])  ? '1' : '0',
@@ -1241,14 +1249,18 @@ function eaf_settings_page() {
                     <p class="description">メールの件名・本文の署名、フォームの利用目的の主語に使われます。運営と施工が同じ会社なので、会社名はこの1箇所だけです。</p></td></tr>
                 <tr><th>電話番号（お客様向け）</th><td>
                     <input type="text" name="<?php echo EAF_OPT; ?>[operator_contact]" value="<?php echo esc_attr(eaf_opt('operator_contact')); ?>" size="40" placeholder="例：055-000-0000">
-                    <p class="description"><strong>フォームの冒頭</strong>と<strong>受付完了メールの末尾</strong>に表示されます。工事の問い合わせは急ぎが多く、電話が最短の導線です。<br>
-                    <span class="description">※ハイフンありで入れると読みやすくなります（例：<code>090-3451-6042</code>）。表示は入力したとおりに出ます。</span></p></td></tr>
+                    <p class="description"><strong>受付完了メールの末尾</strong>に表示されます。<br>
+                    <span class="description">※ハイフンありで入れると読みやすくなります（例：<code>090-3451-6042</code>）。表示は入力したとおりに出ます。</span></p>
+                    <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_telbar]" value="1" <?php checked(eaf_flag('show_telbar', true)); ?>> <strong>フォームの冒頭にも電話案内として出す</strong></label>
+                    <p class="description">外してもメールの署名には残ります。工事の問い合わせは急ぎが多く、電話が最短の導線なので、既定では出しています。</p></td></tr>
                 <tr><th>電話案内のメッセージ</th><td>
-                    <input type="text" name="<?php echo EAF_OPT; ?>[tel_message]" value="<?php echo esc_attr(eaf_opt('tel_message')); ?>" size="50" placeholder="お急ぎの方はお電話ください。">
-                    <p class="description">電話番号の上に出る一行。空欄なら「お急ぎの方はお電話ください。」と表示します。</p></td></tr>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[tel_message]" value="<?php echo esc_attr(eaf_opt('tel_message')); ?>" size="50" placeholder="お急ぎの方はお電話ください。"><br>
+                    <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_tel_message]" value="1" <?php checked(eaf_flag('show_tel_message', true)); ?>> この一行を出す</label>
+                    <p class="description">電話番号の上に出ます。空欄のままなら「お急ぎの方はお電話ください。」と表示します。<strong>チェックを外すと、文言を残したまま出さなくなります。</strong></p></td></tr>
                 <tr><th>電話案内のサブメッセージ</th><td>
-                    <input type="text" name="<?php echo EAF_OPT; ?>[tel_submessage]" value="<?php echo esc_attr(eaf_opt('tel_submessage')); ?>" size="50" placeholder="例：受付 9:00〜18:00（日曜・祝日を除く）">
-                    <p class="description">電話番号の下に小さく出る一行。<strong>空欄なら何も表示しません。</strong>受付時間や「相談だけでも構いません」など、電話をかける前の不安を消す一言に向いています。</p></td></tr>
+                    <input type="text" name="<?php echo EAF_OPT; ?>[tel_submessage]" value="<?php echo esc_attr(eaf_opt('tel_submessage')); ?>" size="50" placeholder="例：受付 9:00〜18:00（日曜・祝日を除く）"><br>
+                    <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_tel_sub]" value="1" <?php checked(eaf_flag('show_tel_sub', true)); ?>> この一行を出す</label>
+                    <p class="description">電話番号の下に小さく出ます。受付時間や「相談だけでも構いません」など、電話をかける前の不安を消す一言に向いています。空欄なら何も出ません。</p></td></tr>
                 <tr><th>問い合わせメール</th><td>
                     <input type="email" name="<?php echo EAF_OPT; ?>[operator_email]" value="<?php echo esc_attr(eaf_opt('operator_email')); ?>" size="40" placeholder="info@example.com">
                     <p class="description">受付完了メールの末尾に載る、お客様からの問い合わせ先です。通知を受け取る「通知先メール（担当者）」とは別に指定できます。</p></td></tr>
@@ -1287,10 +1299,12 @@ function eaf_settings_page() {
                     </p></td></tr>
                 <tr><th>フォーム冒頭の案内文</th><td>
                     <textarea name="<?php echo EAF_OPT; ?>[lead_text]" rows="3" style="width:100%;max-width:760px"><?php echo esc_textarea(eaf_opt('lead_text')); ?></textarea>
-                    <p class="description">フォームの一番上に表示される案内文（任意）。例：「症状とお住まいの市町村が分かれば話が始められます。まずはお気軽にお問い合わせください。」</p></td></tr>
+                    <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_lead]" value="1" <?php checked(eaf_flag('show_lead', true)); ?>> この案内文を出す</label>
+                    <p class="description">フォームの一番上に出ます（任意）。例：「症状とお住まいの市町村が分かれば話が始められます。まずはお気軽にお問い合わせください。」</p></td></tr>
                 <tr><th>市町村欄の補足文</th><td>
                     <input type="text" name="<?php echo EAF_OPT; ?>[city_hint]" value="<?php echo esc_attr(eaf_opt('city_hint')); ?>" size="60" placeholder="例：番地までは不要です。詳しい場所は折り返しの際にうかがいます">
-                    <p class="description">市町村の選択欄の下に小さく出る一行。<strong>空欄なら何も表示しません（既定）。</strong>
+                    <br><label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_city_hint]" value="1" <?php checked(eaf_flag('show_city_hint', true)); ?>> この一行を出す</label>
+                    <p class="description">市町村の選択欄の下に小さく出ます。空欄なら何も出ません（既定は空欄）。
                     選択式なので番地の説明は基本不要ですが、書き添えたいことがあるときに使ってください。</p></td></tr>
                 <tr><th>お問い合わせページ</th><td>
                     <?php
@@ -3412,8 +3426,9 @@ function eaf_shortcode($atts = array()) {
        （本気査定は「電話で済まされると申込が減る」ため伏せていたが、
         自社サイトの工事問い合わせでは電話も同じ受注。隠す理由がない）。 */
     $op_tel = eaf_opt('operator_contact', '');
-    $tel_msg = eaf_opt('tel_message', 'お急ぎの方はお電話ください。');
-    $tel_sub = eaf_opt('tel_submessage', '');
+    /* 文言はそのまま残し、出す・出さないだけをチェックで切り替える */
+    $tel_msg = eaf_flag('show_tel_message', true) ? eaf_opt('tel_message', 'お急ぎの方はお電話ください。') : '';
+    $tel_sub = eaf_flag('show_tel_sub', true)     ? eaf_opt('tel_submessage', '') : '';
 
     /* ★同意はプライバシーポリシーの1本だけ。
        免責事項はフォーク元（価格を示す査定フォーム）で要ったもので、
@@ -3607,9 +3622,11 @@ function eaf_shortcode($atts = array()) {
       </div>
           </form>
 <?php else: /* ===== 通常のフォーム ===== */ ?>
-<?php if ($op_tel !== ''): ?>
+<?php if ($op_tel !== '' && eaf_flag('show_telbar', true)): ?>
     <div class="fhs-telbar">
+<?php if ($tel_msg !== ''): ?>
       <span class="fhs-telbar-msg"><?php echo esc_html($tel_msg); ?></span>
+<?php endif; ?>
       <a class="fhs-telbar-num" href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h3l1.5 4-2 1.4a11 11 0 0 0 5.1 5.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z"/></svg><?php echo esc_html($op_tel); ?></a>
 <?php if ($tel_sub !== ''): ?>
@@ -3617,7 +3634,7 @@ function eaf_shortcode($atts = array()) {
 <?php endif; ?>
     </div>
 <?php endif; ?>
-<?php $lead = eaf_opt('lead_text'); if ($lead !== ''): ?>
+<?php $lead = eaf_flag('show_lead', true) ? eaf_opt('lead_text') : ''; if ($lead !== ''): ?>
     <div class="fhs-lead"><?php echo esc_html($lead); ?></div>
 <?php endif; ?>
     <div class="fhs-errors"></div>
@@ -3664,7 +3681,7 @@ function eaf_shortcode($atts = array()) {
         <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
 <?php endforeach; ?>
       </select>
-<?php $city_hint = eaf_opt('city_hint', ''); if ($city_hint !== ''): ?>
+<?php $city_hint = eaf_flag('show_city_hint', true) ? eaf_opt('city_hint', '') : ''; if ($city_hint !== ''): ?>
       <div class="fhs-hint"><?php echo esc_html($city_hint); ?></div>
 <?php endif; ?>
 <?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>

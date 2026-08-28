@@ -44,7 +44,7 @@ function city_block($html) {
     return $j === false ? $seg : substr($seg, 0, $j);
 }
 t('既定では補足文を出さない', strpos(city_block($html), 'fhs-hint') !== false, false);
-update_option(EAF_OPT, eaf_sanitize_options(array('city_hint' => '番地までは不要です')));
+update_option(EAF_OPT, eaf_sanitize_options(array('city_hint' => '番地までは不要です', 'show_city_hint' => '1')));
 $h2 = eaf_shortcode(array());
 t('設定すれば補足文が出る',   strpos(city_block($h2), '番地までは不要です') !== false, true);
 update_option(EAF_OPT, eaf_sanitize_options(array()));

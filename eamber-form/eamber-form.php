@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.7.1
+ * Version: 1.7.2
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.7.1');
+define('EAF_VER', '1.7.2');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1123,7 +1123,11 @@ function eaf_test_mail() {
     $headers = array('Content-Type: text/plain; charset=UTF-8');
     $from = eaf_from_address(); $site = eaf_opt('site_name', '株式会社e.Amber');
     if ($from) $headers[] = 'From: ' . $site . ' <' . $from . '>';
+    /* ★前回のエラーを消してから送る。残っていると、今回は別の理由で失敗したのに
+       古い理由を見せることになり、切り分けが逆に遠回りになる。 */
+    delete_option('eaf_last_mail_error');
     $ok = wp_mail($to, '[テスト] ' . eaf_mail_subject(), eaf_mail_body($ctx), $headers);
+    if ($ok) delete_option('eaf_last_mail_error');
     wp_safe_redirect(admin_url('admin.php?page=eamber-form&testmail=' . ($ok ? '1' : '0') . '&to=' . rawurlencode($to)));
     exit;
 }
@@ -1195,16 +1199,7 @@ function eaf_settings_page() {
             echo '<div class="notice notice-' . ($tm_ok ? 'success' : 'error') . '"><p>' .
                 ($tm_ok
                     ? 'テストメールを <strong>' . esc_html($tm_to) . '</strong> に送信しました。届かない場合は<strong>迷惑メールフォルダ</strong>も確認してください（届かない＝SPF/DKIM未設定の可能性大）。'
-                    : 'テストメールを送れませんでした。<strong>心当たりの多い順に</strong>：<br>'
-                      . '① <strong>「送信元メール」を空欄にして、もう一度試す。</strong>'
-                      . '<code>' . esc_html(eaf_from_address()) . '</code> として送られます。'
-                      . '受信できるメールボックスは不要で、これがいちばん確実です。<br>'
-                      . '② 差出人に<strong>Gmailなどのフリーメールを入れていないか。</strong>'
-                      . 'gmail.com から送ってよいサーバーにこのサーバーが入っていないため拒否されます。'
-                      . 'Gmailを差出人にしたい場合は「WP Mail SMTP」等でGmail経由の送信に切り替えてください。'
-                      . '<strong>受け取り側（通知先メール）がGmailなのは問題ありません。</strong><br>'
-                      . '③ それでも送れない場合はサーバーがメールを送れない状態です。'
-                      . '「WP Mail SMTP」などのプラグインで、実際のメールアカウント経由の送信に切り替えてください。') .
+                    : eaf_test_mail_failure_html()) .
                 '</p></div>';
         } ?>
         <?php
@@ -1270,7 +1265,7 @@ function eaf_settings_page() {
                     <p class="description">
                         お客様に届く受付完了メールの<strong>差出人</strong>です。
                         <strong>空欄のままで構いません。</strong>その場合
-                        <code><?php echo esc_html(eaf_from_address()); ?></code> として送ります。<br>
+                        <code><?php echo esc_html(eaf_default_from_address()); ?></code> として送ります。<br>
                         <strong>受信できるメールボックスは不要です。</strong>送信専用の表記で、このドメインの送信許可に
                         サーバーが入っているため確実に届きます（Contact Form 7 でも同じ形で運用されていました）。<br>
                         <span class="description">※<strong>Gmailなどのフリーメールを差出人にすると届きません。</strong>
@@ -1283,7 +1278,7 @@ function eaf_settings_page() {
                     <p class="description" style="color:#b32d2e"><strong>差出人が <?php echo esc_html($eaf_free); ?> になっています。</strong>
                         「WP Mail SMTP」等で<?php echo esc_html($eaf_free); ?>経由の送信を設定していない場合、
                         メールは送れないか、届いても迷惑メール扱いになります。<br>
-                        <strong>いちばん簡単なのは、この欄を空欄にすることです</strong>（<code><?php echo esc_html(eaf_from_address()); ?></code> として送られます）。</p>
+                        <strong>いちばん簡単なのは、この欄を空欄にすることです</strong>（<code><?php echo esc_html(eaf_default_from_address()); ?></code> として送られます）。</p>
 <?php endif; ?></td></tr>
                 <tr><th>通知先メール（担当者）</th><td>
                     <input type="email" name="<?php echo EAF_OPT; ?>[notify_email]" value="<?php echo esc_attr(eaf_opt('notify_email')); ?>" size="40"><br>
@@ -3161,12 +3156,82 @@ function eaf_notify_list() {
  *   このドメインの送信許可にサーバーが入っているので確実に届く。
  *   （Contact Form 7 でも wordpress@ドメイン を差出人にして運用していた）
  */
-function eaf_from_address() {
-    $from = eaf_opt('from_email', '');
-    if ($from !== '') return $from;
+/**
+ * 送信元メールを空欄にしたときに使う住所。
+ * ★設定画面の「空欄なら◯◯として送ります」は必ずこちらを出すこと。
+ *   eaf_from_address() を出すと、欄が埋まっているときに
+ *   「空欄ならその埋まっている値で送る」という嘘の案内になる。
+ */
+function eaf_default_from_address() {
     $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
     $host = preg_replace('/^www\./i', '', $host);
     return $host !== '' ? 'wordpress@' . $host : '';
+}
+
+/** 実際に差出人として使う住所（設定があればそれ、無ければ上の既定） */
+function eaf_from_address() {
+    $from = eaf_opt('from_email', '');
+    return $from !== '' ? $from : eaf_default_from_address();
+}
+
+/**
+ * 送信に失敗した理由を控えておく。
+ * ★wp_mail() は false を返すだけで理由を教えない。理由が無いと
+ *   「差出人が悪いのか」「サーバーが送れないのか」を切り分けられず、
+ *   当てずっぽうの案内しか出せない。
+ */
+add_action('wp_mail_failed', 'eaf_mail_error_capture');
+function eaf_mail_error_capture($err) {
+    if (!is_wp_error($err)) return;
+    update_option('eaf_last_mail_error', array(
+        'msg'  => (string) $err->get_error_message(),
+        'from' => eaf_from_address(),
+        'time' => current_time('mysql'),
+    ), false);
+}
+
+/**
+ * テストメールが送れなかったときに出す本文。
+ * ★推測を並べる前に、サーバーが返した実際のエラーを先に出す。
+ *   ここが空のまま案内だけ増やしても、原因の切り分けが進まない。
+ */
+function eaf_test_mail_failure_html() {
+    $h = 'テストメールを送れませんでした。<br>';
+    $e = get_option('eaf_last_mail_error');
+    if (is_array($e) && !empty($e['msg'])) {
+        $h .= '<br><strong>サーバーが返したエラー：</strong><br>'
+            . '<code style="display:inline-block;margin:4px 0;padding:6px 8px;background:#fff;white-space:pre-wrap">'
+            . esc_html($e['msg']) . '</code><br>';
+    } else {
+        $h .= '<br><span class="description">※エラーの詳細は取得できませんでした'
+            . '（送信を横取りするプラグインが入っていると出ないことがあります）。</span><br>';
+    }
+    $h .= '<br><strong>いまの送信の状態：</strong><br>';
+    foreach (eaf_mail_env() as $k => $v) {
+        $h .= '・' . esc_html($k) . '：<code>' . esc_html($v) . '</code><br>';
+    }
+    $h .= '<br><strong>心当たりの多い順に：</strong><br>'
+        . '① <strong>「送信元メール」を空欄にして、もう一度試す。</strong>'
+        . '<code>' . esc_html(eaf_default_from_address()) . '</code> として送られます。'
+        . '受信できるメールボックスは不要で、これがいちばん確実です。<br>'
+        . '② 差出人に<strong>Gmailなどのフリーメールを入れていないか。</strong>'
+        . 'gmail.com から送ってよいサーバーにこのサーバーが入っていないため拒否されます。'
+        . 'Gmailを差出人にしたい場合は「WP Mail SMTP」等でGmail経由の送信に切り替えてください。'
+        . '<strong>受け取り側（通知先メール）がGmailなのは問題ありません。</strong><br>'
+        . '③ 空欄にしても送れない場合は、<strong>サーバーがメールを送れない状態</strong>です。'
+        . '「WP Mail SMTP」などのプラグインで、実際のメールアカウント経由の送信に切り替えてください。';
+    return $h;
+}
+
+/** メール送信まわりの、いまの状態（失敗したときの手がかり） */
+function eaf_mail_env() {
+    return array(
+        '実際に使う差出人' => eaf_from_address(),
+        'PHPのmail()関数'  => function_exists('mail') ? '使える' : '使えない（サーバーが送信を止めています）',
+        'SMTPプラグイン'   => has_filter('phpmailer_init')
+            ? '入っています（WP Mail SMTP等が送信を引き受けています）'
+            : '入っていません（サーバーのmail()で直接送っています）',
+    );
 }
 
 function eaf_free_mail_domain($email) {

@@ -74,6 +74,8 @@ function set_site_transient($k, $v, $t = 0) { return set_transient($k, $v, $t); 
 /* ---------------- フック ---------------- */
 $GLOBALS['FAKE_HOOKS'] = array();
 function add_action($tag, $cb, $prio = 10, $args = 1) { $GLOBALS['FAKE_HOOKS'][$tag][] = $cb; }
+/* 送信をSMTPプラグインが引き受けているかの判定に使う（本物と同じく登録の有無を返す） */
+function has_filter($tag, $cb = false) { return !empty($GLOBALS['FAKE_HOOKS'][$tag]); }
 function add_filter($tag, $cb, $prio = 10, $args = 1) { $GLOBALS['FAKE_HOOKS'][$tag][] = $cb; }
 function do_action($tag) {
     $extra = array_slice(func_get_args(), 1);

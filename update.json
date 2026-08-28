@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.7.1",
+  "version": "1.7.2",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.7.1\nフォームに出る文言（電話案内・そのメッセージ・サブメッセージ・冒頭の案内文・市町村の補足文）を、それぞれチェックで出し分けできるようにした。文言を消さずに止められる。"
+    "changelog": "1.7.2\nテストメールが送れないとき、サーバーが返した実際のエラーと送信環境を表示するようにした。「送信元メールを空欄にした場合の差出人」の案内が、欄に入っている値を出してしまう誤りを修正。"
   }
 }

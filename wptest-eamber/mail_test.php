@@ -58,6 +58,58 @@ update_option('admin_email', 'admin@kai-denkou.com');
 update_option(EAF_OPT, eaf_sanitize_options(array()));
 t('未設定なら管理者宛', eaf_notify_list(), array('admin@kai-denkou.com'));
 
+/* --- 送信元メール：「空欄にしたらどうなるか」の案内 ------------------------
+   ★ここは実際に間違えた箇所。設定画面の「空欄なら◯◯として送ります」に
+     eaf_from_address() を出していたため、欄がGmailで埋まっていると
+     「空欄にすればGmailで送ります」という嘘の案内になっていた。 */
+update_option('home', 'https://kai-denkou.com/stargazer/');
+update_option(EAF_OPT, eaf_sanitize_options(array('from_email' => '')));
+t('空欄ならサイトのドメインで送る', eaf_from_address(), 'wordpress@kai-denkou.com');
+t('空欄時の案内も同じ',             eaf_default_from_address(), 'wordpress@kai-denkou.com');
+
+update_option(EAF_OPT, eaf_sanitize_options(array('from_email' => 'yoshimu.com@gmail.com')));
+t('設定があればそれを使う', eaf_from_address(), 'yoshimu.com@gmail.com');
+t('★空欄時の案内は設定に引きずられない', eaf_default_from_address(), 'wordpress@kai-denkou.com');
+
+$GLOBALS['FAKE_IS_ADMIN'] = true;
+ob_start(); eaf_settings_page(); $page = ob_get_clean();
+t('設定画面の案内は既定の住所で出す',
+  strpos($page, '<code>wordpress@kai-denkou.com</code> として送ります') !== false, true);
+t('★「空欄ならGmailで送る」とは書かない',
+  strpos($page, '<code>yoshimu.com@gmail.com</code> として送ります') !== false, false);
+t('赤い警告の逃げ道も既定の住所',
+  strpos($page, '<code>wordpress@kai-denkou.com</code> として送られます') !== false, true);
+
+/* --- 送信に失敗した理由を控えて、画面に出す ------------------------------
+   ★wp_mail() は false を返すだけ。理由が分からないと「差出人が悪いのか
+     サーバーが送れないのか」を切り分けられず、当てずっぽうしか出せない。 */
+delete_option('eaf_last_mail_error');
+$html = eaf_test_mail_failure_html();
+t('理由が取れないときはその旨を書く',
+  strpos($html, 'エラーの詳細は取得できませんでした') !== false, true);
+
+eaf_mail_error_capture(new WP_Error('wp_mail_failed', 'Could not instantiate mail function.'));
+$e = get_option('eaf_last_mail_error');
+t('エラーを控える', is_array($e) && $e['msg'] === 'Could not instantiate mail function.', true);
+t('そのときの差出人も残す', is_array($e) ? $e['from'] : '', 'yoshimu.com@gmail.com');
+
+$html = eaf_test_mail_failure_html();
+t('画面に実際のエラーを出す', strpos($html, 'Could not instantiate mail function.') !== false, true);
+t('いまの送信の状態も並べる', strpos($html, 'PHPのmail()関数') !== false, true);
+t('SMTPプラグインの有無も出す', strpos($html, 'SMTPプラグイン') !== false, true);
+t('空欄にする案内は既定の住所',
+  strpos($html, '<code>wordpress@kai-denkou.com</code> として送られます') !== false, true);
+
+/* 他のプラグインが WP_Error 以外を流してきても壊れない */
+eaf_mail_error_capture('ただの文字列');
+$e2 = get_option('eaf_last_mail_error');
+t('WP_Error以外は無視する', is_array($e2) ? $e2['msg'] : '', 'Could not instantiate mail function.');
+$GLOBALS['FAKE_IS_ADMIN'] = false;
+
+/* 自己診断 */
+t('自己診断: 失敗時の本文が空ではない', strlen($html) > 100, true);
+t('自己診断: 設定画面を描けている', strpos($page, '送信元メール') !== false, true);
+
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 @unlink($GLOBALS['FAKE_STATE_FILE']);
 exit($ng ? 1 : 0);

@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.8.0",
+  "version": "1.8.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.8.0\n現場の住所をSTEP2に移し、市町村の下で丁目・番地・建物名まで受け取るようにした。住所は通知メール・完了画面・CSV・スプレッドシートにひと続きで出る。"
+    "changelog": "1.8.1\nスプレッドシートへの転記でも、お客様の入力を数式として実行されない形にしてから書き出すよう修正。回数制限のIPを送信者が名乗れないよう修正。テストメールの宛先をURLに載せないよう修正。"
   }
 }

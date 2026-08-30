@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.1
+ * Version: 1.8.2
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.1');
+define('EAF_VER', '1.8.2');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -119,8 +119,11 @@ function eaf_property_fields() {
         'business' => array(
             array('key'=>'bz_work',    'label'=>'ご検討の工事',        'type'=>'cards',  'def'=>'req', 'opts'=>'bz_work'),
             /* 法人は折り返し先が会社なので、社名が無いと誰からの相談か分からない。
-               個人の枝にはこの欄を出さない（法人・その他の枝だけが持つ）。 */
-            array('key'=>'company',    'label'=>'会社名・屋号',        'type'=>'text',   'col'=>'company', 'len'=>150, 'def'=>'req', 'ph'=>'例：株式会社◯◯'),
+               個人の枝にはこの欄を出さない（法人・その他の枝だけが持つ）。
+               ★'step'=>2 ＝ 2枚目（ご連絡先・住所）に出す。会社名は「何に困っているか」
+                 ではなく連絡先の話で、1枚目に置くとタイル＋カードの下にもう一段積まれて
+                 縦に窮屈になる。 */
+            array('key'=>'company',    'label'=>'会社名・屋号',        'type'=>'text',   'col'=>'company', 'len'=>150, 'def'=>'req', 'step'=>2, 'ph'=>'例：株式会社◯◯'),
             /* 用途は既定で出さない。工事の内容と社名が分かれば、店舗か事務所かは
                折り返しの電話で聞ける。法人の枝を2問に保つほうが取りこぼしが少ない。 */
             array('key'=>'bz_kind',    'label'=>'建物の用途',          'type'=>'select', 'def'=>'off', 'opts'=>'bz_kind'),
@@ -135,7 +138,7 @@ function eaf_property_fields() {
             array('key'=>'ot_note',    'label'=>'お問い合わせ内容','type'=>'textarea','def'=>'req', 'ph'=>'例：時々部屋の電気が消えます／以前お願いした工事の件で相談したい'),
             /* 提携の営業・取引の相談もここで受けるので、社名を書く場所を用意する。
                個人の方も通るため任意。必須にすると個人が書けなくなる。 */
-            array('key'=>'company',    'label'=>'会社名・屋号','type'=>'text','col'=>'company','len'=>150,'def'=>'opt','ph'=>'例：株式会社◯◯（法人の方のみ）'),
+            array('key'=>'company',    'label'=>'会社名・屋号','type'=>'text','col'=>'company','len'=>150,'def'=>'opt','step'=>2,'ph'=>'例：株式会社◯◯（法人の方のみ）'),
         ),
     );
 }
@@ -513,6 +516,19 @@ function eaf_mode($group, $key, $def = 'opt') {
     $k = 'mode_' . $group . '_' . $key;
     if (!is_array($o) || !array_key_exists($k, $o)) return $def;
     return in_array($o[$k], array('req', 'opt', 'off'), true) ? $o[$k] : $def;
+}
+
+/**
+ * 項目を「何枚目に出すか」で絞る。
+ * 印が無いものは1枚目（既定）。工事内容ごとの項目だけがこの印を持つ。
+ */
+function eaf_fields_on_step($flds, $step) {
+    $out = array();
+    foreach ($flds as $fd) {
+        $n = isset($fd['step']) ? (int) $fd['step'] : 1;
+        if ($n === (int) $step) $out[] = $fd;
+    }
+    return $out;
 }
 
 /** そのグループの表示対象だけを返す（非表示を除外） */
@@ -3794,7 +3810,7 @@ function eaf_shortcode($atts = array()) {
       <?php /* ★工事内容ごとの質問はタイルのすぐ下に置く。
                押したタイルへの返事なので、市町村を挟むと話が飛んで見える。 */ ?>
 <?php foreach (eaf_property_fields() as $pt => $flds):
-        $vis = eaf_visible_fields('prop_' . $pt, $flds, $compact);
+        $vis = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, $flds, $compact), 1);
         if (!$vis) continue; ?>
       <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
 <?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
@@ -3812,6 +3828,16 @@ function eaf_shortcode($atts = array()) {
 
 <?php if ($stepped): ?><div class="fhs-formstep" data-step="2" style="display:none"><?php endif; ?>
       <div class="fhs-section">ご連絡先</div>
+<?php /* ★会社名は工事内容ごとの項目だが、出すのはこの2枚目。
+         法人名 → 担当者名 → 電話 → 住所 の順で、宛名として自然に読める。
+         1枚目と同じ .fhs-group[data-ptype] なので、表示の切り替えは共通の仕組みが面倒を見る。 */ ?>
+<?php foreach (eaf_property_fields() as $pt => $flds):
+        $vis2 = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, $flds, $compact), 2);
+        if (!$vis2) continue; ?>
+      <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
+<?php   foreach ($vis2 as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
+      </div>
+<?php endforeach; ?>
 <?php if ($cust_fields): ?>
       <div class="fhs-group">
 <?php   foreach ($cust_fields as $fd) { echo $render_field($fd, 'customer_', $uid); } ?>

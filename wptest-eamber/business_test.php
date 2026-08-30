@@ -20,20 +20,35 @@ function t($n, $g, $w) {
     global $ng; $ok = ($g === $w); if (!$ok) $ng++;
     printf("%s %s (got=%s)\n", $ok ? 'OK  ' : 'NG  ', $n, var_export($g, true));
 }
-/** 工事内容ごとの入力欄グループを1つだけ切り出す（CSSや他の枝を巻き込まない） */
-function group_of($html, $pt) {
-    $re = '#<div class="fhs-group" data-ptype="' . preg_quote($pt, '#') . '".*?'
-        . '(?=<div class="fhs-group"|</form>)#s';
+/** STEPの箱を1つ切り出す */
+function step_of($html, $n) {
+    $re = '#<div class="fhs-formstep" data-step="' . (int) $n . '".*?(?=<div class="fhs-formstep"|<div class="fhs-nav">)#s';
     return preg_match($re, $html, $m) ? $m[0] : '';
 }
+/** 工事内容ごとの入力欄グループを1つだけ切り出す（CSSや他の枝を巻き込まない）。
+    ★会社名は2枚目側の同名グループにあるので、どのSTEPを見るかを指定する。 */
+function group_of($html, $pt, $step = 1) {
+    $re = '#<div class="fhs-group" data-ptype="' . preg_quote($pt, '#') . '".*?'
+        . '(?=<div class="fhs-group"|</form>|<div class="fhs-section")#s';
+    $seg = step_of($html, $step);
+    return preg_match($re, $seg, $m) ? $m[0] : '';
+}
 
+/* ★eaf_sanitize_options は渡さなかったチェック項目を全部オフにする。
+     step_form を書かないと2ステップ表示が消え、STEPを見る検査が空振りする。 */
 update_option(EAF_OPT, eaf_sanitize_options(array(
     'site_name' => '株式会社e.Amber', 'notify_email' => 'staff@example.test', 'notify_on' => '1',
+    'step_form' => '1',
 )));
 $html = eaf_shortcode(array());
+t('自己診断: 2ステップで描けている', strpos($html, 'data-step="2"') !== false, true);
 $biz  = group_of($html, 'business');
 $oth  = group_of($html, 'other');
 $air  = group_of($html, 'aircon');
+/* 2枚目に出る側（会社名） */
+$biz2 = group_of($html, 'business', 2);
+$oth2 = group_of($html, 'other', 2);
+$air2 = group_of($html, 'aircon', 2);
 
 echo "--- 1. 二段目のカードが法人の枝にだけ出る ---\n";
 t('自己診断: 法人の枝を切り出せている', $biz !== '', true);
@@ -57,12 +72,21 @@ t('隠し入力が必須になっている',
 t('ラジオは隠し入力を指している',
   preg_match('/class="fhs-choice-in" data-for="[^"]+"/', $biz) === 1, true);
 
-echo "\n--- 4. 会社名の出しかた ---\n";
+echo "\n--- 4. 会社名の出しかた（★２枚目に置く） ---\n";
+/* ★１枚目はタイル＋カードだけで縦に長い。
+   会社名は「何に困っているか」ではなく連絡先の話なので２枚目へ送る。 */
+t('★１枚目に会社名は出ない', strpos(step_of($html, 1), 'business__company') !== false, false);
+t('★２枚目に会社名が出る', strpos(step_of($html, 2), 'business__company') !== false, true);
+t('会社名はお名前より前にある',
+  strpos(step_of($html, 2), 'business__company') < strpos(step_of($html, 2), 'customer_name'), true);
 t('法人は会社名が必須',
-  preg_match('/会社名・屋号<span class="fhs-req">必須<\/span>/', $biz) === 1, true);
+  preg_match('/会社名・屋号<span class="fhs-req">必須<\/span>/', $biz2) === 1, true);
 t('その他は会社名が任意',
-  preg_match('/会社名・屋号<span class="fhs-opt">任意<\/span>/', $oth) === 1, true);
-t('個人の枝に会社名は出ない', strpos($air, 'company') !== false, false);
+  preg_match('/会社名・屋号<span class="fhs-opt">任意<\/span>/', $oth2) === 1, true);
+t('個人の枝に会社名は出ない', strpos($air . $air2, 'company') !== false, false);
+/* 送信キーは変えない（１枚目にあった頃と同じ名前で受ける） */
+t('送信キーは business__company のまま',
+  strpos($html, 'name="business__company"') !== false, true);
 t('建物の用途は既定で出さない', strpos($biz, 'business__bz_kind') !== false, false);
 
 echo "\n--- 5. 保存先（会社名は専用カラムを持つ） ---\n";

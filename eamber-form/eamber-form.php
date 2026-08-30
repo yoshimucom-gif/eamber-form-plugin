@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.7.2
+ * Version: 1.8.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.7.2');
+define('EAF_VER', '1.8.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -141,6 +141,21 @@ function eaf_property_fields() {
 }
 
 /**
+ * 現場の住所のうち、市町村より下（丁目・番地・建物名）。
+ *
+ * ★市町村だけだと現地の下見も見積りも組めないため、番地まで受け取る。
+ *   市町村のセレクトと必ず隣り合わせで出すこと（離すと、どちらが
+ *   どの住所の話なのか分からなくなる）。
+ */
+function eaf_address_fields() {
+    return array(
+        array('key'=>'address_detail', 'label'=>'丁目・番地・建物名', 'type'=>'text',
+              'col'=>'address_detail', 'len'=>255, 'def'=>'req',
+              'ph'=>'例：丸の内1-2-3 ○○マンション101'),
+    );
+}
+
+/**
  * ティザー（記事内などに置く短い入口フォーム）に出せる項目。
  *
  * ★お名前・フリガナ・電話番号・メールは意図的に含めない。
@@ -227,6 +242,7 @@ function eaf_teaser_form_name($key) {
 function eaf_all_groups() {
     $g = array(
         'customer'  => eaf_customer_fields(),
+        'address'   => eaf_address_fields(),
         'situation' => eaf_situation_fields(),
     );
     foreach (eaf_property_fields() as $pt => $flds) $g['prop_' . $pt] = $flds;
@@ -319,6 +335,7 @@ function eaf_activate() {
         timing VARCHAR(50) NULL,
         marketing_opt_in TINYINT(1) DEFAULT 0,
         company VARCHAR(150) NULL,
+        address_detail VARCHAR(255) NULL,
         page_url VARCHAR(255) NULL,
         sheet_sent TINYINT(1) DEFAULT 0,
         PRIMARY KEY  (id)
@@ -332,7 +349,7 @@ function eaf_activate() {
 /** 保存先カラムの一覧（スキーマから自動生成）: col => 最大長 */
 function eaf_lead_columns() {
     $cols = array();
-    $sets = array(eaf_customer_fields(), eaf_situation_fields());
+    $sets = array(eaf_customer_fields(), eaf_address_fields(), eaf_situation_fields());
     /* ★工事内容ごとの項目にもカラムを持つものがある（法人・その他の会社名）。
        ここに入れ忘れると ALTER が走らず、insert がそのキーで丸ごと失敗する。 */
     foreach (eaf_property_fields() as $flds) $sets[] = $flds;
@@ -431,7 +448,7 @@ function eaf_form_url() {
  *   「コードの既定を変えたのに、保存済みの環境では何も変わらない」状態になる。
  *   ここを上げた更新では、保存済みのモードを一度だけ捨てて既定に戻す。
  */
-define('EAF_FIELD_DEFAULTS_VER', '6');   // 6 = 法人はカード選択＋会社名（用途は任意へ）
+define('EAF_FIELD_DEFAULTS_VER', '7');   // 7 = 住所はSTEP2・番地まで受け取る
 
 function eaf_maybe_reset_field_modes() {
     if (get_option('eaf_field_defaults_ver') === EAF_FIELD_DEFAULTS_VER) return;
@@ -447,6 +464,10 @@ function eaf_maybe_reset_field_modes() {
         unset($o['show_marketing']);
         unset($o['show_privacy_note']);
         unset($o['spam_block_link']);
+        /* ★「番地までは不要です」の一行は、番地を受け取るようになった時点で
+           内容が逆になる。保存されていたら捨てる（手で書いた別の文言は残す）。 */
+        if (isset($o['city_hint']) && strpos($o['city_hint'], '番地') !== false
+            && strpos($o['city_hint'], '不要') !== false) unset($o['city_hint']);
         /* フォーク元の既定色そのままなら捨てて、サイトに合わせた新しい既定に任せる。
            手で選んだ色は消さない。 */
         foreach (array('color_brand' => '#1f6feb', 'color_title' => '#1f6feb',
@@ -1118,7 +1139,7 @@ function eaf_test_mail() {
         'ptype_label' => 'エアコン（取り付け・修理）', 'address' => '甲府市',
         'city' => '甲府市',
         'customer_details' => "■ お名前 : 山田 太郎\n■ 電話番号 : 090-1234-5678\n■ ご連絡しやすい時間帯 : 午後（12〜17時）",
-        'property_details' => "■ 工事内容 : エアコン（取り付け・修理）\n■ 現場の市町村 : 甲府市\n■ 建物の種類 : 戸建て\n■ ご希望の作業 : 入れ替えたい\n■ 設置する階 : 2階\n■ 専用コンセントの有無 : 分からない",
+        'property_details' => "■ 工事内容 : エアコン（取り付け・修理）\n■ 現場の住所 : 甲府市 丸の内1-2-3\n■ 建物の種類 : 戸建て\n■ ご希望の作業 : 入れ替えたい\n■ 設置する階 : 2階\n■ 専用コンセントの有無 : 分からない",
     );
     $headers = array('Content-Type: text/plain; charset=UTF-8');
     $from = eaf_from_address(); $site = eaf_opt('site_name', '株式会社e.Amber');
@@ -1297,7 +1318,7 @@ function eaf_settings_page() {
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_lead]" value="1" <?php checked(eaf_flag('show_lead', true)); ?>> この案内文を出す</label>
                     <p class="description">フォームの一番上に出ます（任意）。例：「症状とお住まいの市町村が分かれば話が始められます。まずはお気軽にお問い合わせください。」</p></td></tr>
                 <tr><th>市町村欄の補足文</th><td>
-                    <input type="text" name="<?php echo EAF_OPT; ?>[city_hint]" value="<?php echo esc_attr(eaf_opt('city_hint')); ?>" size="60" placeholder="例：番地までは不要です。詳しい場所は折り返しの際にうかがいます">
+                    <input type="text" name="<?php echo EAF_OPT; ?>[city_hint]" value="<?php echo esc_attr(eaf_opt('city_hint')); ?>" size="60" placeholder="例：お伺いする住所として使います。番地・建物名までお願いします">
                     <br><label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_city_hint]" value="1" <?php checked(eaf_flag('show_city_hint', true)); ?>> この一行を出す</label>
                     <p class="description">市町村の選択欄の下に小さく出ます。空欄なら何も出ません（既定は空欄）。
                     選択式なので番地の説明は基本不要ですが、書き添えたいことがあるときに使ってください。</p></td></tr>
@@ -1343,6 +1364,7 @@ function eaf_settings_page() {
             <?php
             $groups = array(
                 'customer'  => array('お客様のご連絡先', 'お名前・電話番号は、折り返しのご連絡に必要な中心項目です。'),
+                'address'   => array('現場の住所', '市町村のセレクトは常に必須です。その下の丁目・番地・建物名だけ切り替えられます。'),
                 'situation' => array('ご状況', '担当者が優先順位を付け、初回の連絡で的確に話すための情報です。'),
             );
             foreach (eaf_property_fields() as $pt => $flds) {
@@ -1967,7 +1989,7 @@ function eaf_leads_page() {
     echo '<p>反響件数：' . $total . ' 件（表示は最新200件）　<a class="button button-primary" href="' . esc_url($export) . '">CSVエクスポート（Excel）</a></p>';
     echo '<p class="description">個人情報を含みます。CSVの取り扱いにご注意ください。</p>';
     echo '<table class="widefat striped"><thead><tr>';
-    echo '<th>受付日時</th><th>お名前</th><th>電話</th><th>メール</th><th>工事内容</th><th>市町村</th><th>建物</th><th>時期</th><th>詳細</th><th>操作</th></tr></thead><tbody>';
+    echo '<th>受付日時</th><th>お名前</th><th>電話</th><th>メール</th><th>工事内容</th><th>現場の住所</th><th>建物</th><th>時期</th><th>詳細</th><th>操作</th></tr></thead><tbody>';
     if ($rows) foreach ($rows as $r) {
         $plabel = isset($GLOBALS['EAF_PTYPE_LABEL'][$r->ptype]) ? $GLOBALS['EAF_PTYPE_LABEL'][$r->ptype] : $r->ptype;
         $det = isset($r->details) ? (string)$r->details : '';
@@ -1979,6 +2001,11 @@ function eaf_leads_page() {
         $co = isset($r->company) ? (string) $r->company : '';
         if ($co !== '') $namecell = '<span style="display:block;font-size:12px;color:#555">'
                                   . esc_html($co) . '</span>' . $namecell;
+        /* 住所も列を増やさず、市町村の下に番地を小さく続ける */
+        $addrcell = esc_html($g(isset($r->address) ? $r->address : ''));
+        $ad = isset($r->address_detail) ? (string) $r->address_detail : '';
+        if ($ad !== '') $addrcell .= '<span style="display:block;font-size:12px;color:#555">'
+                                   . esc_html($ad) . '</span>';
         printf('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
              . '<td style="white-space:pre-line;font-size:12px;line-height:1.5">%s</td>'
              . '<td><a href="%s" onclick="return confirm(\'この反響を削除しますか？\')" style="color:#b32d2e">削除</a></td></tr>',
@@ -1987,7 +2014,7 @@ function eaf_leads_page() {
             esc_html($g(isset($r->tel) ? $r->tel : '')),
             esc_html($g($r->email)),
             esc_html($plabel),
-            esc_html($g(isset($r->address) ? $r->address : '')),
+            $addrcell,   /* 中で esc_html 済み */
             esc_html($g(isset($r->building) ? $r->building : '')),
             esc_html($g(isset($r->timing) ? $r->timing : '')),
             esc_html($det !== '' ? $det : '-'),
@@ -2011,8 +2038,8 @@ function eaf_export_leads() {
     header('Content-Disposition: attachment; filename="eamber_oiawase.csv"');
     $out = fopen('php://output', 'w');
     if (!$can_sjis) fwrite($out, "\xEF\xBB\xBF");
-    $head = array('ID','受付日時','会社名','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','送信元ページ');
-    $cols = array('id','created_at','company','name','kana','tel','email','contact_time','ptype','address','building','ownership','timing','detail','details','page_url');
+    $head = array('ID','受付日時','会社名','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','丁目・番地・建物名','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','送信元ページ');
+    $cols = array('id','created_at','company','name','kana','tel','email','contact_time','ptype','address','address_detail','building','ownership','timing','detail','details','page_url');
     $sjis = function ($s) use ($can_sjis) {
         return $can_sjis ? mb_convert_encoding((string)$s, 'SJIS-win', 'UTF-8') : (string)$s;
     };
@@ -2141,6 +2168,11 @@ function eaf_ajax() {
 
     list($cust, $cust_lines) = $collect('customer',  eaf_customer_fields(),  'customer_');
     list($situ, $situ_lines) = $collect('situation', eaf_situation_fields(), 'situation_');
+    /* 市町村より下（丁目・番地・建物名）。設定で任意・非表示にもできる。
+       ★$collect はこの行より上では未定義なので、住所の検証と同じ場所には置けない。 */
+    list($addr_vals, $addr_lines) = $collect('address', eaf_address_fields(), '');
+    $address_detail = isset($addr_vals['address_detail']) ? $addr_vals['address_detail']['val'] : '';
+    $address_full = trim($address . ' ' . $address_detail);
 
     // 工事内容ごとの項目
     $prop_lines = array(); $prop_vals = array();
@@ -2154,7 +2186,7 @@ function eaf_ajax() {
     /* スパム判定。自由入力の欄をまとめて見る。
        ★理由は伝えない（どこで弾かれたかをボットに教えないため）。 */
     $free_text = array($address);
-    foreach (array($cust, $situ, $prop_vals) as $set) {
+    foreach (array($cust, $situ, $addr_vals, $prop_vals) as $set) {
         foreach ($set as $item) $free_text[] = $item['val'];
     }
     $cust_name = isset($cust['name']) ? $cust['name']['val'] : '';
@@ -2178,7 +2210,7 @@ function eaf_ajax() {
 
     // メール・画面用のまとまり
     $customer_details = implode("\n", $cust_lines);
-    $prop_head = array('■ 工事内容 : ' . $label, '■ 現場の市町村 : ' . $address);
+    $prop_head = array('■ 工事内容 : ' . $label, '■ 現場の住所 : ' . $address_full);
     $property_details = implode("\n", array_merge($prop_head, $situ_lines, $prop_lines));
 
     // 「詳細」列に入れるもの＝個別カラムを持たない項目 ＋ 工事内容ごとの項目
@@ -2214,7 +2246,7 @@ function eaf_ajax() {
     );
     // 個別カラムを持つ項目（お名前・電話番号など）を、カラム長に丸めて格納
     $lens = eaf_lead_columns();
-    foreach (array($cust, $situ, $prop_vals) as $set) {
+    foreach (array($cust, $situ, $addr_vals, $prop_vals) as $set) {
         foreach ($set as $item) {
             $col = isset($item['fd']['col']) ? $item['fd']['col'] : null;
             if ($col) $row[$col] = eaf_trim_len($item['val'], isset($lens[$col]) ? $lens[$col] : 191);
@@ -2249,7 +2281,7 @@ function eaf_ajax() {
         'tel'   => isset($cust['tel'])  ? $cust['tel']['val']  : '',
         'email' => $email,
         'ptype_label' => $label,
-        'address' => $address,
+        'address' => $address_full,
         'city'    => $address,
         'customer_details' => $customer_details,
         'property_details' => $property_details,
@@ -2278,7 +2310,7 @@ function eaf_ajax() {
     wp_send_json(array(
         'ok' => true, 'mail_ok' => (bool)$mail_ok,
         'email' => $email, 'name' => $ctx['name'], 'tel' => $ctx['tel'],
-        'ptype_label' => $label, 'address' => $address,
+        'ptype_label' => $label, 'address' => $address_full,
         'confirm_text' => implode("\n", $confirm_lines),
     ));
 }
@@ -2296,7 +2328,7 @@ function eaf_ajax() {
 
 /** ステップの名前。JSとフォーム本体の両方から使う */
 function eaf_step_titles() {
-    return array('お困りの内容', 'ご連絡先');
+    return array('お困りの内容', 'ご連絡先・住所');
 }
 
 /** フォームのCSS。色と配色は設定だけで決まるので、ショートコードが無くても組める */
@@ -2649,15 +2681,15 @@ function eaf_form_js() {
   // 画面の並び順に：選択中の内容の必須項目 → 市町村 → その他の必須項目
   // ★工事内容（タイル）はラジオなのでこの一覧には入れず、updateFormState で個別に見る
   // ★メールは任意なのでここには入れない（形式チェックはステップ送りと送信時に行う）
+  /* ★画面に出ている順そのままで拾う。住所がSTEP2に移り、項目の並びと
+       この一覧の並びがずれると、「次に書く欄」の合図が画面外を指す。 */
   function currentRequired(){
-    var req = [];
-    var pt = ptypeValue();
-    if (pt) {
-      var g = wrap.querySelector('.fhs-group[data-ptype="' + pt + '"]');
-      if (g) Array.prototype.forEach.call(g.querySelectorAll('[data-req="1"]'), function(el){ req.push(el); });
-    }
-    if (form.elements['address']) req.push(form.elements['address']);
-    Array.prototype.forEach.call(form.querySelectorAll('.fhs-group:not([data-ptype]) [data-req="1"]'), function(el){ req.push(el); });
+    var req = [], pt = ptypeValue();
+    Array.prototype.forEach.call(form.querySelectorAll('select[name="address"], [data-req="1"]'), function(el){
+      var g = el.closest ? el.closest('.fhs-group[data-ptype]') : null;
+      if (g && g.getAttribute('data-ptype') !== pt) return;   // 選んでいない種別の欄は数えない
+      req.push(el);
+    });
     return req;
   }
 
@@ -2973,7 +3005,7 @@ function eaf_form_js() {
       + (d.tel ? '<tr><th>電話番号</th><td>'+esc(d.tel)+'</td></tr>' : '')
       + (d.email ? '<tr><th>メール</th><td>'+esc(d.email)+'</td></tr>' : '')
       + '<tr><th>工事内容</th><td>'+esc(d.ptype_label)+'</td></tr>'
-      + (d.address ? '<tr><th>現場の市町村</th><td>'+esc(d.address)+'</td></tr>' : '');
+      + (d.address ? '<tr><th>現場の住所</th><td>'+esc(d.address)+'</td></tr>' : '');
     var det = d.confirm_text
       ? '<div class="fhs-hint" style="white-space:pre-line;margin-top:10px">'+esc(d.confirm_text)+'</div>' : '';
     var mailLine = !d.email
@@ -3067,14 +3099,14 @@ function eaf_sheet_gas_code() {
         "    if (SECRET && data.secret !== SECRET) return out({ ok: false, error: 'secret' });",
         "    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];",
         "    if (sh.getLastRow() === 0) {",
-        "      sh.appendRow(['受付日時','工事内容','市町村','会社名','お名前','フリガナ','電話番号','メール',",
+        "      sh.appendRow(['受付日時','工事内容','市町村','丁目・番地・建物名','会社名','お名前','フリガナ','電話番号','メール',",
         "                    '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
         "                    '症状・ご希望','詳細','送信元ページ','ID']);",
         "    }",
         "    // ★列は固定。フォームで項目を出す/隠すを切り替えても列はずれない。",
         "    //   隠している項目はその列が空になるだけ。",
         "    sh.appendRow([",
-        "      data.created_at, data.ptype, data.address, data.company, data.name, data.kana, data.tel, data.email,",
+        "      data.created_at, data.ptype, data.address, data.address_detail, data.company, data.name, data.kana, data.tel, data.email,",
         "      data.contact_time, data.building, data.ownership, data.timing,",
         "      data.detail, data.details, data.page_url, data.id",
         "    ]);",
@@ -3107,6 +3139,7 @@ function eaf_sheet_payload($r) {
         'created_at' => isset($r['created_at']) ? $r['created_at'] : '',
         'ptype'      => isset($GLOBALS['EAF_PTYPE_LABEL'][$pt]) ? $GLOBALS['EAF_PTYPE_LABEL'][$pt] : $pt,
         'address'    => isset($r['address']) ? $r['address'] : '',
+        'address_detail' => isset($r['address_detail']) ? $r['address_detail'] : '',
         'company'    => isset($r['company']) ? $r['company'] : '',
         'name'       => isset($r['name']) ? $r['name'] : '',
         'kana'       => isset($r['kana']) ? $r['kana'] : '',
@@ -3739,16 +3772,6 @@ function eaf_shortcode($atts = array()) {
       </div>
 <?php endforeach; ?>
 
-      <label for="<?php echo esc_attr($uid . '-address'); ?>">お住まい・現場の市町村<span class="fhs-req">必須</span></label>
-      <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" required>
-        <option value="">選択してください</option>
-<?php foreach (eaf_opt_list('city') as $ct): ?>
-        <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
-<?php endforeach; ?>
-      </select>
-<?php $city_hint = eaf_flag('show_city_hint', true) ? eaf_opt('city_hint', '') : ''; if ($city_hint !== ''): ?>
-      <div class="fhs-hint"><?php echo esc_html($city_hint); ?></div>
-<?php endif; ?>
 <?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>
 <?php if ($situ_fields): ?>
       <div class="fhs-group">
@@ -3765,6 +3788,22 @@ function eaf_shortcode($atts = array()) {
 <?php   foreach ($cust_fields as $fd) { echo $render_field($fd, 'customer_', $uid); } ?>
       </div>
 <?php endif; ?>
+<?php /* ★住所はSTEP2に置く。1画面目は「何に困っているか」だけにしておき、
+         住所のような個人情報は、進む意思を示したあとに聞く。 */ ?>
+      <label for="<?php echo esc_attr($uid . '-address'); ?>">お住まい・現場の市町村<span class="fhs-req">必須</span></label>
+      <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" required>
+        <option value="">選択してください</option>
+<?php foreach (eaf_opt_list('city') as $ct): ?>
+        <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
+<?php endforeach; ?>
+      </select>
+<?php foreach (eaf_visible_fields('address', eaf_address_fields(), $compact) as $fd) {
+        echo $render_field($fd, '', $uid);
+      } ?>
+<?php $city_hint = eaf_flag('show_city_hint', true) ? eaf_opt('city_hint', '') : ''; if ($city_hint !== ''): ?>
+      <div class="fhs-hint"><?php echo esc_html($city_hint); ?></div>
+<?php endif; ?>
+
       <label for="<?php echo esc_attr($uid . '-email'); ?>">メールアドレス<span class="fhs-opt">任意</span></label>
       <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email">
       <div class="fhs-hint">ご入力いただくと、受付内容の控えをメールでお送りします</div>

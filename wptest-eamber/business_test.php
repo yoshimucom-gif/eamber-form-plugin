@@ -90,7 +90,7 @@ function last_row() {
 }
 
 $biz_post = array(
-    'ptype' => 'business', 'address' => '甲府市', 'agree' => '1',
+    'ptype' => 'business', 'address' => '甲府市', 'address_detail' => '丸の内1-2-3', 'agree' => '1',
     'business__bz_work' => 'キュービクル・受電設備',
     'business__company' => '株式会社サンプル電機',
     'customer_name' => '田中 一郎', 'customer_tel' => '090-1234-5678', 'email' => '',
@@ -118,7 +118,7 @@ t('選択肢外の値は捨てて必須エラーにする',
 
 echo "\n--- 8. その他の枝は会社名なしでも通る ---\n";
 $r = submit(array(
-    'ptype' => 'other', 'address' => '甲府市', 'agree' => '1',
+    'ptype' => 'other', 'address' => '甲府市', 'address_detail' => '丸の内1-2-3', 'agree' => '1',
     'other__ot_note' => '取引のご相談です', 'other__company' => '',
     'customer_name' => '佐藤 花子', 'customer_tel' => '090-5555-6666', 'email' => '',
 ));

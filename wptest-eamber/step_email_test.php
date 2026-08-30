@@ -21,7 +21,8 @@ function t($n, $g, $w) {
 /* ================= 1. 2ステップ構成 ================= */
 $html = eaf_shortcode(array());
 t('ステップは2つ',                substr_count($html, '<div class="fhs-formstep"'), 2);
-t('ステップ名は 概要→個人情報',    strpos(fake_inline_script(), '["お困りの内容","ご連絡先"]') !== false, true);
+/* ★住所はSTEP2に移した。1画面目は「何に困っているか」だけにする。 */
+t('ステップ名は 内容→連絡先と住所', strpos(fake_inline_script(), '["お困りの内容","ご連絡先・住所"]') !== false, true);
 t('「ご状況」という中間ステップが無い', strpos($html, 'ご状況') !== false, false);
 
 /* 工事内容別の必須（エアコンなら「ご希望の作業」）は1画面目=data-step="1"の中にある */
@@ -40,7 +41,8 @@ preg_match_all('/\sname="([^"]+)"/', $html, $m);
 $names = array_values(array_unique($m[1]));
 sort($names);
 $expected = array(
-    'address',            // 市町村（必須）
+    'address',            // 市町村（必須・STEP2）
+    'address_detail',     // 丁目・番地・建物名（必須・STEP2）
     'agree',              // 同意（必須）
     'aircon__ac_work',    // 工事内容別の必須 × 8種
     'breaker__br_symptom',
@@ -149,7 +151,7 @@ function submit($post) {
 }
 
 $base = array(
-    'ptype' => 'aircon', 'address' => '甲府市', 'agree' => '1',
+    'ptype' => 'aircon', 'address' => '甲府市', 'address_detail' => '丸の内1-2-3', 'agree' => '1',
     'aircon__ac_work' => '入れ替えたい',
     'customer_name' => '山田 太郎', 'customer_tel' => '090-1234-5678',
 );

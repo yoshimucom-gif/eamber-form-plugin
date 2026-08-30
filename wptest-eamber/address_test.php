@@ -48,25 +48,40 @@ t('進捗の名前も住所を含む',
 /* --- 3. 市町村はセレクトで必須 --- */
 t('セレクトで出る（自由入力ではない）', strpos($html, '<select name="address"') !== false, true);
 t('テキスト入力の残骸が無い',           strpos($html, '<input type="text" name="address"') !== false, false);
-t('必須になっている', preg_match('/お住まい・現場の市町村<span class="fhs-req">必須<\/span>/', $html) === 1, true);
+t('必須になっている', preg_match('/現場の住所<span class="fhs-req">必須<\/span>/', $html) === 1, true);
 foreach (array('甲府市', '丹波山村', '山梨県外') as $c) {
     t('選択肢: ' . $c, strpos($html, '>' . $c . '</option>') !== false, true);
 }
 
-/* --- 4. 番地欄：市町村のすぐ下に、既定で必須 --- */
-t('ラベルは丁目・番地・建物名',
-  preg_match('/丁目・番地・建物名<span class="fhs-req">必須<\/span>/', $html) === 1, true);
-/* ★離して置くと、どちらがどの住所の話か分からなくなる。間に他の入力欄を挟まない */
-$between = substr($s2, strpos($s2, '</select>'), 400);
-t('市町村と番地の間に他の欄を挟まない',
-  strpos($between, 'name="address_detail"') !== false, true);
+/* --- 4. 見た目はひと続きの1欄。ラベルは2つに割らない ---
+   ★「お住まい・現場の市町村」と「丁目・番地・建物名」を別々の見出しにすると、
+     同じ住所を二度聞かれているように見える。中身は分けたまま、見せ方だけ1つにする。 */
+t('見出しは1つだけ', substr_count($html, '>現場の住所<span'), 1);
+t('市町村だけの見出しは残っていない', strpos($html, 'お住まい・現場の市町村') !== false, false);
+t('丁目・番地の見出しを別に立てない',
+  preg_match('/丁目・番地・建物名<span class="fhs-(req|opt)">/', $html) === 1, false);
+/* 同じ囲みの中に、市町村セレクトと番地入力が並ぶ */
+$box = preg_match('#<div class="fhs-addr">.*?</div>#s', $s2, $m) ? $m[0] : '';
+t('自己診断: 住所の囲みを切り出せている', $box !== '', true);
+t('囲みの中に市町村がある', strpos($box, '<select name="address"') !== false, true);
+t('囲みの中に番地がある',   strpos($box, 'name="address_detail"') !== false, true);
+/* 見出しを共有するので、番地には読み上げ用の名前を付ける */
+t('番地に読み上げ用の名前がある',
+  strpos($box, 'aria-label="丁目・番地・建物名"') !== false, true);
 t('書き方の例が入っている', strpos($html, '丸の内1-2-3') !== false, true);
+t('番地は必須として扱う', preg_match('/name="address_detail"[^>]*data-req="1"/', $box) === 1, true);
 
 /* --- 5. 設定で任意・非表示にできる --- */
 update_option(EAF_OPT, eaf_sanitize_options(array('mode_address_address_detail' => 'opt')));
-t('任意にできる', preg_match('/丁目・番地・建物名<span class="fhs-opt">任意<\/span>/', eaf_shortcode(array())) === 1, true);
+$h_opt = eaf_shortcode(array());
+t('任意にすると必須の印が外れる',
+  preg_match('/name="address_detail"[^>]*data-req="1"/', $h_opt) === 1, false);
+t('任意だと分かる書き方に変わる', strpos($h_opt, '丁目・番地・建物名（任意）') !== false, true);
 update_option(EAF_OPT, eaf_sanitize_options(array('mode_address_address_detail' => 'off')));
-t('非表示にできる', strpos(eaf_shortcode(array()), 'name="address_detail"') !== false, false);
+$h_off = eaf_shortcode(array());
+t('非表示にできる', strpos($h_off, 'name="address_detail"') !== false, false);
+t('番地を出さないときは見出しが市町村に戻る',
+  strpos($h_off, 'お住まい・現場の市町村') !== false, true);
 update_option(EAF_OPT, eaf_sanitize_options(array()));
 
 /* --- 6. 補足文（出し分け） --- */

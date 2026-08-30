@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.2
+ * Version: 1.8.3
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.2');
+define('EAF_VER', '1.8.3');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -2422,6 +2422,10 @@ function eaf_form_css() {
     /* 項目は2カラムでコンパクトに（textarea・チェックは全幅） */
     .fhs-group{display:grid;grid-template-columns:1fr 1fr;gap:0 18px;align-items:start}
     .fhs-field{min-width:0}
+    /* 住所は1つの欄に見せる。市町村は選ぶだけなので狭く、残りに番地を伸ばす */
+    .fhs-addr{display:flex;gap:8px;align-items:stretch}
+    .fhs-wrap .fhs-addr-city{flex:0 0 34%;min-width:0;margin:0}
+    .fhs-wrap .fhs-addr-rest{flex:1 1 auto;min-width:0;margin:0}
     .fhs-field.fhs-full{grid-column:1/-1}
     /* 1つしか出ていない組は半分幅だと市町村の欄と揃わず、崩れて見える */
     .fhs-group > .fhs-field:only-child{grid-column:1/-1}
@@ -2625,6 +2629,9 @@ function eaf_form_css() {
       /* 3列だと1枚あたりが狭すぎて代表例が読めなくなるので、狭い端末は2列 */
       .fhs-tiles{grid-template-columns:repeat(2,1fr);gap:8px}
       .fhs-choice{grid-template-columns:repeat(2,1fr);gap:7px}
+      /* 狭い画面は1行に収まらないので縦に積む */
+      .fhs-addr{flex-direction:column;gap:7px}
+      .fhs-wrap .fhs-addr-city{flex:0 0 auto}
       .fhs-wrap .fhs-tile{min-height:0;padding:13px 8px}
       .fhs-ttitle{font-size:19px}
       .fhs-design-teaser .fhs-card,.fhs-design-teaser-v .fhs-card{padding:18px 16px 20px}
@@ -2712,9 +2719,19 @@ function eaf_form_js() {
   }
   function fieldOk(el){ return fieldProblem(el) === null; }
 
-  // 直前の <label> 内の「必須」バッジ
+  /* 直前の <label> 内の「必須」バッジ。
+     ★住所のように1つのラベルへ2つの欄がぶら下がる形もあるので、
+       直前に無ければ同じ囲みの中のラベルまで探しに行く。 */
   function badgeFor(el){
     var lbl = el.previousElementSibling;
+    if (!lbl || lbl.tagName !== 'LABEL') {
+      var box = el.closest ? (el.closest('.fhs-field') || el.closest('.fhs-addr')) : null;
+      if (box && box.classList.contains('fhs-addr')) {
+        lbl = box.previousElementSibling;
+      } else if (box) {
+        lbl = box.querySelector('label');
+      }
+    }
     return (lbl && lbl.tagName === 'LABEL') ? lbl.querySelector('.fhs-req') : null;
   }
 
@@ -2752,14 +2769,23 @@ function eaf_form_js() {
       if (!ptOk) remaining++;
     }
 
+    /* ★1つの印を2つの欄で共有することがある（住所＝市町村＋番地）。
+         先に全部見てから、全部埋まっているときだけ ✓ にする。
+         1つずつ書き換えると、あとの欄の結果で前の欄の判定が上書きされる。 */
+    var marks = [];
     req.forEach(function(el){
       var b = badgeFor(el);
       var filled = fieldOk(el);   // 形式まで正しいときだけ ✓ にする
       if (b) {
-        if (filled) { b.classList.add('fhs-done'); b.textContent = '✓'; }
-        else { b.classList.remove('fhs-done'); b.textContent = '必須'; }
+        var hit = null;
+        for (var i = 0; i < marks.length; i++) if (marks[i][0] === b) hit = marks[i];
+        if (hit) hit[1] = hit[1] && filled; else marks.push([b, filled]);
       }
       if (!filled) { remaining++; if (!firstEmpty) firstEmpty = el; }
+    });
+    marks.forEach(function(m){
+      if (m[1]) { m[0].classList.add('fhs-done'); m[0].textContent = '✓'; }
+      else { m[0].classList.remove('fhs-done'); m[0].textContent = '必須'; }
     });
     if (firstEmpty) firstEmpty.classList.add('fhs-next');
     if (resumeBox) {
@@ -2831,6 +2857,10 @@ function eaf_form_js() {
   function labelTextOf(el){
     if (el.name === 'agree') return '個人情報の取扱いへの同意';
     if (el.name === 'ptype') return 'お困りの内容';
+    /* ★住所は2つの欄で1つのラベルを共有している。まとめて「現場の住所」と言うと
+         どちらを直せばいいのか分からないので、サーバー側のエラー文と同じ名前を返す。 */
+    if (el.name === 'address') return 'お住まい・現場の市町村';
+    if (el.name === 'address_detail') return '丁目・番地・建物名';
     var lbl = el.previousElementSibling;
     if (!lbl || lbl.tagName !== 'LABEL') {
       var byId = el.id ? wrap.querySelector('label[for="' + el.id + '"]') : null;
@@ -3845,16 +3875,34 @@ function eaf_shortcode($atts = array()) {
 <?php endif; ?>
 <?php /* ★住所はSTEP2に置く。1画面目は「何に困っているか」だけにしておき、
          住所のような個人情報は、進む意思を示したあとに聞く。 */ ?>
-      <label for="<?php echo esc_attr($uid . '-address'); ?>">お住まい・現場の市町村<span class="fhs-req">必須</span></label>
-      <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" required>
-        <option value="">選択してください</option>
+<?php
+      /* ★市町村と番地は、見た目はひと続きの「現場の住所」1欄にする。
+         2つのラベルに割ると、同じ住所を二度聞かれているように見える。
+         データとしては分けたまま（市町村はセレクト＝表記ゆれが出ないので、
+         対応エリアの判定・市町村ごとの集計・通知メールの件名に使える）。 */
+      $addr_vis = eaf_visible_fields('address', eaf_address_fields(), $compact);
+      $addr_fd  = $addr_vis ? $addr_vis[0] : null;
+      $addr_id  = $uid . '-address_detail';
+      $addr_ph  = $addr_fd ? (isset($addr_fd['ph']) ? $addr_fd['ph'] : '') : '';
+      if ($addr_fd && $addr_fd['mode'] !== 'req') $addr_ph = '丁目・番地・建物名（任意）';
+?>
+      <label for="<?php echo esc_attr($uid . '-address'); ?>"><?php
+        echo $addr_fd ? '現場の住所' : 'お住まい・現場の市町村'; ?><span class="fhs-req">必須</span></label>
+      <div class="fhs-addr">
+        <select name="address" id="<?php echo esc_attr($uid . '-address'); ?>" class="fhs-addr-city" required>
+          <option value="">市町村を選ぶ</option>
 <?php foreach (eaf_opt_list('city') as $ct): ?>
-        <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
+          <option value="<?php echo esc_attr($ct); ?>"><?php echo esc_html($ct); ?></option>
 <?php endforeach; ?>
-      </select>
-<?php foreach (eaf_visible_fields('address', eaf_address_fields(), $compact) as $fd) {
-        echo $render_field($fd, '', $uid);
-      } ?>
+        </select>
+<?php if ($addr_fd): ?>
+        <input type="text" name="address_detail" id="<?php echo esc_attr($addr_id); ?>"
+               class="fhs-typed fhs-addr-rest" data-req="<?php echo $addr_fd['mode'] === 'req' ? '1' : ''; ?>"
+               autocomplete="address-line1"
+               aria-label="<?php echo esc_attr($addr_fd['label']); ?>"
+               placeholder="<?php echo esc_attr($addr_ph); ?>">
+<?php endif; ?>
+      </div>
 <?php $city_hint = eaf_flag('show_city_hint', true) ? eaf_opt('city_hint', '') : ''; if ($city_hint !== ''): ?>
       <div class="fhs-hint"><?php echo esc_html($city_hint); ?></div>
 <?php endif; ?>

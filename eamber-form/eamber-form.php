@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.5
+ * Version: 1.8.6
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.5');
+define('EAF_VER', '1.8.6');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -62,7 +62,7 @@ function eaf_situation_fields() {
         array('key'=>'ownership',  'label'=>'持ち家か賃貸か',        'type'=>'select', 'col'=>'ownership', 'len'=>50,  'def'=>'off', 'opts'=>'ownership'),
         array('key'=>'since',      'label'=>'いつからの症状ですか',   'type'=>'select', 'col'=>null,        'len'=>50,  'def'=>'off', 'opts'=>'since'),
         array('key'=>'timing',     'label'=>'ご希望の時期',          'type'=>'select', 'col'=>'timing',    'len'=>50,  'def'=>'off', 'opts'=>'timing'),
-        array('key'=>'detail',     'label'=>'症状・ご希望',          'type'=>'textarea','col'=>'detail',   'len'=>2000,'def'=>'off', 'ph'=>'例：2階の部屋のブレーカーだけ、エアコンを付けると落ちます'),
+        array('key'=>'detail',     'label'=>'ご相談内容',            'type'=>'textarea','col'=>'detail',   'len'=>2000,'def'=>'off', 'ph'=>'例：ご相談内容を簡単に記入してください。'),
     );
 }
 
@@ -2090,7 +2090,7 @@ function eaf_export_leads() {
     header('Content-Disposition: attachment; filename="eamber_oiawase.csv"');
     $out = fopen('php://output', 'w');
     if (!$can_sjis) fwrite($out, "\xEF\xBB\xBF");
-    $head = array('ID','受付日時','会社名','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','丁目・番地・建物名','建物の種類','持ち家/賃貸','希望時期','症状・ご希望','詳細','送信元ページ');
+    $head = array('ID','受付日時','会社名','お名前','フリガナ','電話番号','メール','連絡希望時間帯','工事内容','市町村','丁目・番地・建物名','建物の種類','持ち家/賃貸','希望時期','ご相談内容','詳細','送信元ページ');
     $cols = array('id','created_at','company','name','kana','tel','email','contact_time','ptype','address','address_detail','building','ownership','timing','detail','details','page_url');
     $sjis = function ($s) use ($can_sjis) {
         return $can_sjis ? mb_convert_encoding((string)$s, 'SJIS-win', 'UTF-8') : (string)$s;
@@ -3189,7 +3189,7 @@ function eaf_sheet_gas_code() {
         "    if (sh.getLastRow() === 0) {",
         "      sh.appendRow(['受付日時','工事内容','市町村','丁目・番地・建物名','会社名','お名前','フリガナ','電話番号','メール',",
         "                    '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
-        "                    '症状・ご希望','詳細','送信元ページ','ID']);",
+        "                    'ご相談内容','詳細','送信元ページ','ID']);",
         "    }",
         "    // ★列は固定。フォームで項目を出す/隠すを切り替えても列はずれない。",
         "    //   隠している項目はその列が空になるだけ。",

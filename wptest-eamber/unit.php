@@ -107,5 +107,33 @@ $cols = eaf_lead_columns();
      ALTER が走らず、法人の反響が insert ごと失敗して1件も残らない。 */
 t('保存カラム一覧', array_keys($cols), array('name','kana','tel','contact_time','address_detail','building','ownership','timing','detail','company'));
 
+/* --- 10. 見出しの一致（フォーム・CSV・スプレッドシート） ---
+   ★同じ項目の見出しが3か所に散っている。1か所だけ直して他が古いまま残ると、
+     担当者は「フォームの◯◯」と「CSVの△△」が同じものだと気づけない。 */
+$label_of = function ($key) {
+    foreach (eaf_situation_fields() as $fd) if ($fd['key'] === $key) return $fd['label'];
+    return '';
+};
+t('ご相談内容の見出し', $label_of('detail'), 'ご相談内容');
+/* ★「症状」はブレーカー等の別項目でも使う語なので、この欄の例文だけを見る */
+$ph_of = function ($key) {
+    foreach (eaf_situation_fields() as $fd) if ($fd['key'] === $key) return isset($fd['ph']) ? $fd['ph'] : '';
+    return '';
+};
+t('書き方の例も入れ替わっている', $ph_of('detail'), '例：ご相談内容を簡単に記入してください。');
+
+$gas = eaf_sheet_gas_code();
+t('スプレッドシートの見出しも同じ', strpos($gas, "'" . $label_of('detail') . "'") !== false, true);
+t('古い見出しは残っていない',       strpos($gas, '症状・ご希望') !== false, false);
+
+/* CSVは出力後に exit するので、子プロセスで受け取る */
+$csv = (string) shell_exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/sec_case.php')
+     . ' ' . escapeshellarg('eaf_export_leads') . ' ' . escapeshellarg('manage_options')
+     . ' 0 ' . escapeshellarg('eaf_export_leads') . ' 2>&1');
+if (function_exists('mb_convert_encoding')) $csv = mb_convert_encoding($csv, 'UTF-8', 'SJIS-win');
+t('自己診断: CSVを受け取れている', strpos($csv, '受付日時') !== false, true);
+t('CSVの見出しも同じ',             strpos($csv, $label_of('detail')) !== false, true);
+t('CSVに古い見出しが残っていない', strpos($csv, '症状・ご希望') !== false, false);
+
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";
 exit($ng ? 1 : 0);

@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.8.5",
+  "version": "1.8.6",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.8.5\n設定の色欄をWordPress標準のカラーピッカーに変更。ブラウザ標準の色入力はOSのダイアログがRGB表示で開き、16進の貼り付けもできなかったため。"
+    "changelog": "1.8.6\n「症状・ご希望」を「ご相談内容」に変更（フォーム・CSV・スプレッドシートの見出しをまとめて）。例文も差し替え。"
   }
 }

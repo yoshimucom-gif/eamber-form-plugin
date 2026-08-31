@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.9.0\n進み具合のバーの色を、ボタンとは別に選べるようにした（進んだところ／これからのところ）。未指定のあいだは今までどおりボタンの色に追従する。"
+    "changelog": "1.9.1\n「ご相談内容」などのご状況の欄も、タイルを選んでから出るようにした。あわせて、ご相談内容を出しているときは「その他」の枝の自由記述を重ねないようにした。"
   }
 }

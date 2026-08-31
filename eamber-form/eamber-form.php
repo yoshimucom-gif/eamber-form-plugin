@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.9.0
+ * Version: 1.9.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.9.0');
+define('EAF_VER', '1.9.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -141,6 +141,22 @@ function eaf_property_fields() {
             array('key'=>'company',    'label'=>'会社名・屋号','type'=>'text','col'=>'company','len'=>150,'def'=>'opt','step'=>2,'ph'=>'例：株式会社◯◯（法人の方のみ）'),
         ),
     );
+}
+
+/**
+ * 「その他」の枝の自由記述を出すかどうか。
+ *
+ * ★共通の「ご相談内容」（ご状況グループ）を表示しているなら、その他の枝だけの
+ *   自由記述は重ねない。両方出すと、その他を選んだ人には同じことを聞く欄が
+ *   2つ並ぶ。既定では「ご相談内容」は非表示なので、そのときは今までどおり
+ *   その他の枝の自由記述が受け皿になる。
+ * ★描画と受け取りの両方で同じ判断をすること。片方だけ落とすと、
+ *   画面に無い欄を必須として弾く（送信できないフォームになる）。
+ */
+function eaf_prop_fields_for($pt, $flds) {
+    if ($pt !== 'other') return $flds;
+    if (eaf_mode('situation', 'detail', 'off') === 'off') return $flds;
+    return array_values(array_filter($flds, function ($fd) { return $fd['key'] !== 'ot_note'; }));
 }
 
 /**
@@ -2262,7 +2278,7 @@ function eaf_ajax() {
     $prop_lines = array(); $prop_vals = array();
     $schema = eaf_property_fields();
     if (isset($schema[$ptype])) {
-        list($prop_vals, $prop_lines) = $collect('prop_' . $ptype, $schema[$ptype], $ptype . '__');
+        list($prop_vals, $prop_lines) = $collect('prop_' . $ptype, eaf_prop_fields_for($ptype, $schema[$ptype]), $ptype . '__');
     }
 
     if ($errors) wp_send_json(array('ok' => false, 'errors' => $errors));
@@ -2799,6 +2815,7 @@ function eaf_form_js() {
     Array.prototype.forEach.call(form.querySelectorAll('select[name="address"], [data-req="1"]'), function(el){
       var g = el.closest ? el.closest('.fhs-group[data-ptype]') : null;
       if (g && g.getAttribute('data-ptype') !== pt) return;   // 選んでいない種別の欄は数えない
+      if (!pt && el.closest && el.closest('.fhs-after-ptype')) return;   // 選ぶ前は出ていない欄
       req.push(el);
     });
     return req;
@@ -2849,11 +2866,16 @@ function eaf_form_js() {
   }
 
   // 種別を選ぶと、その種別の入力欄だけ表示
+  var afterPtype = wrap.querySelectorAll('.fhs-after-ptype');
   function switchType(){
     if (TEASER) return;
     var pt = ptypeValue();
     Array.prototype.forEach.call(groups, function(g){
       g.style.display = (g.getAttribute('data-ptype') === pt) ? '' : 'none';
+    });
+    /* 工事内容ごとの質問と同じく、ご状況も選んでから出す */
+    Array.prototype.forEach.call(afterPtype, function(g){
+      g.style.display = pt ? '' : 'none';
     });
     updateFormState();
   }
@@ -2894,7 +2916,9 @@ function eaf_form_js() {
     var els = box.querySelectorAll('select[name="address"], [data-req="1"]');
     Array.prototype.forEach.call(els, function(el){
       if (!el.offsetParent && el.type !== 'hidden') return;      // 表示されていない種別の欄は対象外
-      if (el.closest('.fhs-group[data-ptype]') && el.closest('.fhs-group[data-ptype]').style.display === 'none') return;
+      /* 隠れているまとまりの中の欄は対象外（種別ごとの質問も、ご状況も同じ扱い） */
+      var grp = el.closest ? el.closest('.fhs-group') : null;
+      if (grp && grp.style.display === 'none') return;
       if (!fieldOk(el)) out.push(el);
     });
     // メールは任意。ただし入力があって形式が違うときだけ止める
@@ -3894,16 +3918,18 @@ function eaf_shortcode($atts = array()) {
       <?php /* ★工事内容ごとの質問はタイルのすぐ下に置く。
                押したタイルへの返事なので、市町村を挟むと話が飛んで見える。 */ ?>
 <?php foreach (eaf_property_fields() as $pt => $flds):
-        $vis = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, $flds, $compact), 1);
+        $vis = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, eaf_prop_fields_for($pt, $flds), $compact), 1);
         if (!$vis) continue; ?>
       <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
 <?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
       </div>
 <?php endforeach; ?>
 
-<?php /* ご状況は最初のステップに同居させる（ステップは「概要 → 個人情報」の2つだけ） */ ?>
+<?php /* ★ご状況もタイルを選んでから出す。工事内容ごとの質問は選択後に出るのに
+         ここだけ最初から出ていると、まだ何も選んでいない人に
+         「相談内容を書け」と迫る形になり、画面の作法もそろわない。 */ ?>
 <?php if ($situ_fields): ?>
-      <div class="fhs-group">
+      <div class="fhs-group fhs-after-ptype" style="display:none">
 <?php   foreach ($situ_fields as $fd) { echo $render_field($fd, 'situation_', $uid); } ?>
       </div>
 <?php endif; ?>
@@ -3916,7 +3942,7 @@ function eaf_shortcode($atts = array()) {
          法人名 → 担当者名 → 電話 → 住所 の順で、宛名として自然に読める。
          1枚目と同じ .fhs-group[data-ptype] なので、表示の切り替えは共通の仕組みが面倒を見る。 */ ?>
 <?php foreach (eaf_property_fields() as $pt => $flds):
-        $vis2 = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, $flds, $compact), 2);
+        $vis2 = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, eaf_prop_fields_for($pt, $flds), $compact), 2);
         if (!$vis2) continue; ?>
       <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
 <?php   foreach ($vis2 as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>

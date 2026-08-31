@@ -156,7 +156,53 @@ $gas = eaf_sheet_gas_code();
 t('スクリプトの見出しに会社名がある', strpos($gas, "'会社名'") !== false, true);
 t('スクリプトが会社名を書き込む',     strpos($gas, 'data.company') !== false, true);
 
-echo "\n--- 10. 自己診断（検査が空振りしていないこと） ---\n";
+echo "\n--- 10. 入力欄はタイルを選んでから出す ---\n";
+/* ★工事内容ごとの質問は選んでから出るのに、ご状況（ご相談内容）だけ
+     最初から出ていた。まだ何も選んでいない人に「相談内容を書け」と迫る形になり、
+     画面の作法もそろわない。 */
+/* ご状況は既定で全項目が非表示なので、1つ出した状態で確かめる */
+update_option(EAF_OPT, eaf_sanitize_options(array(
+    'site_name' => '株式会社e.Amber', 'step_form' => '1', 'mode_situation_detail' => 'req')));
+$h_situ = eaf_shortcode(array());
+t('ご状況もタイルの後に出す',
+  strpos($h_situ, '<div class="fhs-group fhs-after-ptype" style="display:none">') !== false, true);
+t('自己診断: ご状況の欄が実際に出ている', strpos($h_situ, 'name="situation_detail"') !== false, true);
+t('切り替える仕掛けがある', strpos(fake_inline_script(), 'fhs-after-ptype') !== false, true);
+t('選ぶ前は必須の数に含めない',
+  strpos(fake_inline_script(), "if (!pt && el.closest && el.closest('.fhs-after-ptype')) return;") !== false, true);
+
+echo "\n--- 11. 自由記述が2つ並ばない ---\n";
+/* ★共通の「ご相談内容」を出しているときに、その他の枝の自由記述も出すと、
+     その他を選んだ人には同じことを聞く欄が2つ並ぶ。 */
+$opts_base = array(
+    'site_name' => '株式会社e.Amber', 'notify_email' => 'staff@example.test', 'notify_on' => '1',
+    'step_form' => '1',
+);
+update_option(EAF_OPT, eaf_sanitize_options($opts_base));
+$h_off = eaf_shortcode(array());
+t('ご相談内容が非表示なら、その他の自由記述が受け皿',
+  strpos($h_off, 'name="other__ot_note"') !== false, true);
+
+update_option(EAF_OPT, eaf_sanitize_options($opts_base + array('mode_situation_detail' => 'req')));
+$h_on = eaf_shortcode(array());
+t('★ご相談内容を出したら、その他の自由記述は重ねない',
+  strpos($h_on, 'name="other__ot_note"') !== false, false);
+t('ご相談内容のほうは出ている', strpos($h_on, 'name="situation_detail"') !== false, true);
+
+/* ★描画と受け取りで判断がずれると、画面に無い欄を必須として弾く。
+     その他を、ご相談内容だけ書いて送れること。 */
+eaf_activate();
+$r = submit(array(
+    'ptype' => 'other', 'address' => '甲府市', 'address_detail' => '丸の内1-2-3', 'agree' => '1',
+    'situation_detail' => '取引のご相談です',
+    'customer_name' => '佐藤 花子', 'customer_tel' => '090-7777-8888', 'email' => '',
+));
+t('★隠した欄を必須として弾かない', is_array($r) && $r['ok'] === true, true);
+t('書いた内容は残る',
+  strpos((string) last_row()['detail'], '取引のご相談です') !== false, true);
+update_option(EAF_OPT, eaf_sanitize_options($opts_base));
+
+echo "\n--- 12. 自己診断（検査が空振りしていないこと） ---\n";
 t('自己診断: 枝の切り出しは他の枝を巻き込まない', strpos($air, 'business__') !== false, false);
 t('自己診断: 存在しない選択肢は見つからない', strpos($biz, 'value="架空の工事"') !== false, false);
 

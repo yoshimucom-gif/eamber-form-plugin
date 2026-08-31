@@ -63,7 +63,28 @@ update_option(EAF_OPT, eaf_sanitize_options(array(
 )));
 $field = eaf_color_field('color_badge', '#E8A33D');
 t('テキスト欄に現在値が入る', strpos($field, 'value="#00a86b"') !== false, true);
-t('初期値ボタンに既定色',     strpos($field, 'data-default="#E8A33D"') !== false, true);
+t('既定色を持っている',       strpos($field, 'data-default="#E8A33D"') !== false, true);
+t('保存先の名前が付いている', strpos($field, 'name="eamber_form_options[color_badge]"') !== false, true);
+
+/* ★色は16進で扱う。ブラウザ標準の <input type="color"> はOSのダイアログを開くため、
+     開いた直後はRGBのスライダーで、ブランドカラーを貼り付けることもできない。
+     WordPress標準のカラーピッカー（16進の入力欄が主）に任せる。 */
+t('★ブラウザ標準の色入力は使わない', strpos($field, 'type="color"') !== false, false);
+t('★カラーピッカーに既定色を渡す',   strpos($field, 'data-default-color="#E8A33D"') !== false, true);
+t('16進の欄はテキスト入力',           strpos($field, '<input type="text"') !== false, true);
+
+/* 設定画面でだけカラーピッカーを読み込む */
+fake_assets_reset();
+do_action('admin_enqueue_scripts', 'toplevel_page_eamber-form');
+t('設定画面でカラーピッカーを読み込む', wp_script_is('wp-color-picker'), true);
+t('その見た目も読み込む',               wp_style_is('wp-color-picker'), true);
+fake_assets_reset();
+do_action('admin_enqueue_scripts', 'edit.php');
+t('関係ない画面では読み込まない',       wp_script_is('wp-color-picker'), false);
+
+/* 包めなかったときでも、ただのテキスト欄として保存できる形になっている */
+t('包む前でも入力欄として完成している',
+  preg_match('/<input type="text"[^>]*name="eamber_form_options\[color_badge\]"[^>]*value="#00a86b"/', $field) === 1, true);
 
 /* --- 4. CSSへの反映 ---
    ★CSSはショートコードの戻り値ではなく、WordPressのキューに積まれる。

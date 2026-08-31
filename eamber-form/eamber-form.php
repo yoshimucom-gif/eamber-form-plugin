@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.4
+ * Version: 1.8.5
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.4');
+define('EAF_VER', '1.8.5');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -617,9 +617,15 @@ add_action('admin_init', function () {
     register_setting('eaf_group', EAF_OPT, 'eaf_sanitize_options');
 });
 
-/* 設定画面で「メディアから選ぶ」を使えるようにする（画像選択ダイアログ） */
+/* 設定画面で使う道具を読み込む（画像選択ダイアログ・カラーピッカー） */
 add_action('admin_enqueue_scripts', function ($hook) {
-    if (strpos($hook, 'eamber-form') !== false) wp_enqueue_media();
+    if (strpos($hook, 'eamber-form') === false) return;
+    wp_enqueue_media();
+    /* ★色は16進で扱う。ブラウザ標準の <input type="color"> はOSのダイアログを開くため、
+       開いた直後はRGBのスライダーで、ブランドカラー（#1E3050 など）を貼り付けることも
+       できない。WordPress標準のカラーピッカーは16進の入力欄が主なので、そちらを使う。 */
+    wp_enqueue_style('wp-color-picker');
+    wp_enqueue_script('wp-color-picker');
 });
 
 /**
@@ -1191,19 +1197,23 @@ function eaf_test_mail() {
  * 8. 管理画面：設定
  * ======================================================================= */
 /**
- * 色の入力欄。カラーピッカーだけだと「いま何番の色なのか」が分からず、
- * ブランドカラーの指定（#1E3050 など）を貼り付けることもできないため、
- * ★HEXのテキスト入力を主にして、ピッカーは横に並べる。両者は双方向に同期する。
+ * 色の入力欄。
+ *
+ * ★16進のテキスト入力が主。ブラウザ標準の <input type="color"> はOSのダイアログを
+ *   開くため、初期表示がRGBのスライダーになり、ブランドカラーの指定（#1E3050 など）を
+ *   貼り付けることもできない。WordPress標準のカラーピッカーで包むと、
+ *   同じ欄がそのまま16進の入力欄になり、押せば見本からも選べる。
+ * ★包めなかった環境（jQueryが無い等）でも、ただのテキスト欄として動く。
  */
 function eaf_color_field($key, $default) {
     $v = eaf_opt($key, $default);
     ob_start(); ?>
     <span class="fhs-colorfield">
-      <input type="color" class="fhs-color-pick" value="<?php echo esc_attr($v); ?>" aria-label="カラーピッカーで選ぶ">
       <input type="text" class="fhs-color-hex code" name="<?php echo EAF_OPT; ?>[<?php echo esc_attr($key); ?>]"
              value="<?php echo esc_attr($v); ?>" maxlength="7" size="9" spellcheck="false" autocomplete="off"
+             data-default-color="<?php echo esc_attr($default); ?>"
+             data-default="<?php echo esc_attr($default); ?>"
              placeholder="<?php echo esc_attr($default); ?>">
-      <button type="button" class="button button-small fhs-color-reset" data-default="<?php echo esc_attr($default); ?>">初期値</button>
     </span>
 <?php return ob_get_clean();
 }
@@ -1232,9 +1242,10 @@ function eaf_settings_page() {
     if (!current_user_can('manage_options')) wp_die('権限がありません');
     ?>
     <style>
-      .fhs-colorfield{display:inline-flex;align-items:center;gap:8px}
-      .fhs-colorfield input[type=color]{width:46px;height:34px;padding:2px;border:1px solid #8c8f94;border-radius:4px;background:#fff;cursor:pointer;flex:0 0 auto}
+      .fhs-colorfield{display:inline-block;vertical-align:top}
       .fhs-colorfield input[type=text]{width:104px;font-family:monospace;text-transform:lowercase}
+      /* カラーピッカーで包まれたあとも、16進の欄の幅を保つ */
+      .fhs-colorfield .wp-picker-container .wp-color-picker{width:104px}
       .fhs-colorfield input[type=text].fhs-bad{border-color:#d63638;box-shadow:0 0 0 1px #d63638}
       .fhs-logofield{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
       .fhs-logo-preview{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border:1px solid #dcdcde;border-radius:6px;background:#fff;overflow:hidden;flex:0 0 auto}
@@ -1870,36 +1881,37 @@ function eaf_settings_page() {
     </div>
     <script>
     (function(){
-        /* 色欄：HEXテキストとカラーピッカーを双方向に同期する */
-        function expand(v){   // #abc → #aabbcc（input[type=color] は6桁しか受け付けない）
-            return v.length === 4 ? '#' + v[1]+v[1] + v[2]+v[2] + v[3]+v[3] : v;
-        }
+        /* 色欄：WordPress標準のカラーピッカーで包む（16進の入力欄が主）。
+           ★カラーピッカーはフッターで読み込まれることがあるので、
+             DOMの読み込みが終わってから包む。ここで待たないと
+             jQuery がまだ無く、ただのテキスト欄のままになる。 */
         function norm(v){
             v = String(v == null ? '' : v).trim().toLowerCase();
             if (v !== '' && v.charAt(0) !== '#') v = '#' + v;
             return /^#([0-9a-f]{3}|[0-9a-f]{6})$/.test(v) ? v : null;
         }
-        document.querySelectorAll('.fhs-colorfield').forEach(function(f){
-            var pick = f.querySelector('.fhs-color-pick'),
-                hex = f.querySelector('.fhs-color-hex'),
-                reset = f.querySelector('.fhs-color-reset');
-            pick.addEventListener('input', function(){ hex.value = pick.value; hex.classList.remove('fhs-bad'); });
-            hex.addEventListener('input', function(){
-                var v = norm(hex.value);
-                if (v) { pick.value = expand(v); hex.classList.remove('fhs-bad'); }
-                else hex.classList.toggle('fhs-bad', hex.value.trim() !== '');   // 空欄は初期値に戻る指定として許す
+        function initColorFields(){
+            var fields = document.querySelectorAll('.fhs-colorfield .fhs-color-hex');
+            if (window.jQuery && jQuery.fn && jQuery.fn.wpColorPicker) {
+                jQuery(fields).wpColorPicker();   // 既定色は data-default-color から読まれる
+                return;
+            }
+            /* 包めなかったときの受け皿：16進として読める形に整えるだけはやる */
+            Array.prototype.forEach.call(fields, function(hex){
+                hex.addEventListener('input', function(){
+                    hex.classList.toggle('fhs-bad', hex.value.trim() !== '' && !norm(hex.value));
+                });
+                hex.addEventListener('blur', function(){
+                    var v = norm(hex.value);
+                    if (v) { hex.value = v; hex.classList.remove('fhs-bad'); }   // #ABC → #abc
+                });
             });
-            hex.addEventListener('blur', function(){
-                var v = norm(hex.value);
-                if (v) hex.value = v;                       // #ABC → #abc に整える
-                else if (hex.value.trim() !== '') { hex.value = pick.value; hex.classList.remove('fhs-bad'); }
-            });
-            reset.addEventListener('click', function(){
-                hex.value = reset.getAttribute('data-default');
-                pick.value = reset.getAttribute('data-default');
-                hex.classList.remove('fhs-bad');
-            });
-        });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initColorFields);
+        } else {
+            initColorFields();
+        }
 
         /* 画像を選ぶ欄。ページ内にいくつあっても動くようクラスで走査する。
            wp.media が使えない環境でも、URLを直接貼れば動く。 */

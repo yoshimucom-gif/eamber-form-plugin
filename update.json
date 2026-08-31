@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.8.4",
+  "version": "1.8.5",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.8.4\nスマホでフォームが画面の端に張り付く問題を修正。ページが全幅ブロックでテーマ側の左右余白がゼロのとき、フォーム自身が左右16pxの余白を持つようにした。"
+    "changelog": "1.8.5\n設定の色欄をWordPress標準のカラーピッカーに変更。ブラウザ標準の色入力はOSのダイアログがRGB表示で開き、16進の貼り付けもできなかったため。"
   }
 }

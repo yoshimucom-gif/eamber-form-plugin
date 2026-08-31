@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.11.0\nフォーム冒頭の案内文（リード文）にも左に画像を置いて吹き出しにできるようにした。吹き出しは案内文と電話案内で共通の部品にした。"
+    "changelog": "1.12.0\nティザーの既定を工事内容だけにし、STEPの番号を付けないようにした。本フォームのSTEP番号と字面がぶつかって、進んだのか戻ったのか分からなくなっていたため。"
   }
 }

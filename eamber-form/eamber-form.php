@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.11.0
+ * Version: 1.12.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.11.0');
+define('EAF_VER', '1.12.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -184,7 +184,7 @@ function eaf_address_fields() {
 function eaf_teaser_fields() {
     return array(
         'ptype'   => array('label' => 'お困りの内容',   'type' => 'ptype'),
-        'address' => array('label' => '市町村',        'type' => 'select', 'opts' => 'city'),
+        'address' => array('label' => 'お住まい・現場の市町村', 'type' => 'select', 'opts' => 'city'),
         'timing'  => array('label' => 'ご希望の時期',   'type' => 'select', 'opts' => 'timing'),
     );
 }
@@ -222,7 +222,10 @@ function eaf_parse_teaser_fields($raw) {
         $k = trim($k);
         if ($k !== '' && isset($known[$k]) && !in_array($k, $out, true)) $out[] = $k;
     }
-    return $out ? $out : array('ptype', 'address');
+    /* ★既定は工事内容だけ。ティザーの仕事は「押してもらう」ことなので、
+       自分ごとになるタイルだけ見せる。市町村は選んでも先の手間が1つ減るだけで、
+       入口で作業を増やすほうが損。必要なら fields="ptype,address" で出せる。 */
+    return $out ? $out : array('ptype');
 }
 
 /**
@@ -3639,7 +3642,10 @@ function eaf_shortcode($atts = array()) {
         'design' => 'default', 'button' => '',
         // ティザー用
         'url' => '', 'title' => '', 'subtitle' => '', 'note' => '', 'fields' => '',
-        'logo' => '', 'badge' => '', 'steps' => '1', 'width' => '', 'tags' => '',
+        /* ★ティザーにSTEP番号は付けない。本フォームの「STEP 1 / 2」と字面が同じで、
+           ティザーの STEP 2 を終えて進むと本フォームの STEP 1 に戻るため、
+           進んだのか戻ったのか分からなくなる。出したい場合だけ steps="1"。 */
+        'logo' => '', 'badge' => '', 'steps' => '0', 'width' => '', 'tags' => '',
     ), $atts, 'eamber_form');
     $design  = in_array($a['design'], array('default', 'compact', 'card', 'teaser', 'teaser-v'), true) ? $a['design'] : 'default';
     $compact = ($design === 'compact');

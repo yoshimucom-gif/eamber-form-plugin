@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.3
+ * Version: 1.8.4
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.3');
+define('EAF_VER', '1.8.4');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -2392,6 +2392,12 @@ function eaf_form_css() {
        このフォームの中だけは border-box に固定して、どのテーマでも同じ見た目にする。 */
     .fhs-wrap,.fhs-wrap *{box-sizing:border-box}
     .fhs-card{background:transparent;border:0;border-radius:0;padding:0 0 28px}
+    /* ★左右の余白は自分で持つ。導入先のページが「全幅」ブロックだと
+       テーマ側の余白がゼロで、フォームが画面の端にぴったり張り付く。
+       広い画面では中央に寄って余白が生まれるので、狭いときだけ効かせる。 */
+    @media(max-width:720px){
+      .fhs-wrap .fhs-card{padding-left:16px;padding-right:16px}
+    }
     .fhs-wrap{overflow-wrap:anywhere}   /* 長いメールアドレスや住所で横スクロールさせない */
     .fhs-card > :last-child{margin-bottom:0}
     .fhs-wrap label{display:block;font-weight:700;margin:18px 0 7px;font-size:17px;color:#374151;letter-spacing:.01em}

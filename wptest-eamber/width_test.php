@@ -66,7 +66,18 @@ t('中央に寄せている', strpos($css, 'margin:0 auto') !== false, true);
 /* 幅を絞ってもタイルは3列のまま（1列に崩れると縦に伸びきる） */
 t('タイルは3列を保つ', strpos($css, '.fhs-tiles{display:grid;grid-template-columns:repeat(3,1fr)') !== false, true);
 
-/* --- 6. 自己診断 --- */
+/* --- 6. 狭い画面での左右の余白 ---
+   ★導入先のページが「全幅（alignfull）」ブロックだと、テーマ側の左右余白が
+     ゼロになり、フォームが画面の端にぴったり張り付く。実際に eamber.jp の
+     お問い合わせページがこの状態だった（先祖の要素すべて padding 0）。
+     テーマに頼らず、フォーム自身が余白を持つ。 */
+t('狭い画面用の余白の指定がある', strpos($css, '@media(max-width:720px)') !== false, true);
+t('カードに左の余白を付ける',     strpos($css, '.fhs-wrap .fhs-card{padding-left:16px') !== false, true);
+t('右の余白も付ける',             strpos($css, 'padding-right:16px}') !== false, true);
+/* 広い画面では中央に寄って余白が生まれるので、常時は効かせない */
+t('常時の余白は増やさない',       strpos($css, '.fhs-card{background:transparent;border:0;border-radius:0;padding:0 0 28px}') !== false, true);
+
+/* --- 7. 自己診断 --- */
 t('自己診断: max-widthを取り出せている', maxw(array('width' => '555')), '555px');
 
 echo $ng ? "\n### 失敗 {$ng} 件\n" : "\n### すべて成功\n";

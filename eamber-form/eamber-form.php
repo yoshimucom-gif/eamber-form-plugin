@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.6
+ * Version: 1.8.7
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.6');
+define('EAF_VER', '1.8.7');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1347,7 +1347,10 @@ function eaf_settings_page() {
                         <strong>いちばん簡単なのは、この欄を空欄にすることです</strong>（<code><?php echo esc_html(eaf_default_from_address()); ?></code> として送られます）。</p>
 <?php endif; ?></td></tr>
                 <tr><th>通知先メール（担当者）</th><td>
-                    <input type="email" name="<?php echo EAF_OPT; ?>[notify_email]" value="<?php echo esc_attr(eaf_opt('notify_email')); ?>" size="40"><br>
+                    <?php /* ★multiple を付けないと、ブラウザが1件しか認めず
+                             「@に続く文字列に記号「,」を使用しないでください」と出て保存できない。
+                             付けるとカンマ区切りが正式な書き方として通り、1件ずつ形式も見てくれる。 */ ?>
+                    <input type="email" multiple name="<?php echo EAF_OPT; ?>[notify_email]" value="<?php echo esc_attr(eaf_opt('notify_email')); ?>" size="40" placeholder="例：staff@example.com, tantou@example.com"><br>
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[notify_on]" value="1" <?php checked(eaf_flag('notify_on', true)); ?>> 申し込みが届いたら通知する</label>
                     <p class="description">
                         反響が届いたことを知らせる<strong>受け取り先</strong>です。<strong>Gmailで構いません。</strong><br>
@@ -1911,6 +1914,18 @@ function eaf_settings_page() {
             document.addEventListener('DOMContentLoaded', initColorFields);
         } else {
             initColorFields();
+        }
+
+        /* 通知先メール：複数書けるが、ブラウザが認める区切りは半角カンマだけ。
+           ★全角の読点や空白で区切ると「@に続く文字列に記号を使用しないでください」と
+             出て保存できない。書き方で悩ませないよう、離れた時点で整える。 */
+        var notify = document.querySelector('input[name="<?php echo EAF_OPT; ?>[notify_email]"]');
+        if (notify) {
+            notify.addEventListener('blur', function(){
+                var v = notify.value.replace(/[\u3001\uFF0C]/g, ',')
+                                    .split(/[\s,]+/).filter(Boolean).join(', ');
+                if (v !== notify.value) notify.value = v;
+            });
         }
 
         /* 画像を選ぶ欄。ページ内にいくつあっても動くようクラスで走査する。

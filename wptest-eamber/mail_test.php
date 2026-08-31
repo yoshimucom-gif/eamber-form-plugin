@@ -58,6 +58,22 @@ update_option('admin_email', 'admin@kai-denkou.com');
 update_option(EAF_OPT, eaf_sanitize_options(array()));
 t('未設定なら管理者宛', eaf_notify_list(), array('admin@kai-denkou.com'));
 
+/* --- 通知先はカンマ区切りで複数書ける（入力欄の側も許していること） -------
+   ★<input type="email"> のままだとブラウザが1件しか認めず、
+     「@に続く文字列に記号「,」を使用しないでください」と出て保存できない。
+     HTMLの multiple を付けて初めて、カンマ区切りが正式な書き方になる。 */
+$GLOBALS['FAKE_IS_ADMIN'] = true;
+ob_start(); eaf_settings_page(); $page2 = ob_get_clean();
+t('★通知先は複数書ける入力欄',
+  preg_match('/<input type="email" multiple name="[^"]*\[notify_email\]"/', $page2) === 1, true);
+t('書き方の例に2件並べてある', strpos($page2, 'staff@example.com, tantou@example.com') !== false, true);
+/* 送信元は1件だけ。ここに multiple が付くと、複数書けると誤解させる */
+t('送信元は1件だけの入力欄',
+  preg_match('/<input type="email" multiple name="[^"]*\[from_email\]"/', $page2) === 1, false);
+/* 全角読点や空白で書かれても、離れた時点で半角カンマに整える */
+t('区切りを整える処理がある', strpos($page2, "split(/[\s,]+/)") !== false, true);
+$GLOBALS['FAKE_IS_ADMIN'] = false;
+
 /* --- 送信元メール：「空欄にしたらどうなるか」の案内 ------------------------
    ★ここは実際に間違えた箇所。設定画面の「空欄なら◯◯として送ります」に
      eaf_from_address() を出していたため、欄がGmailで埋まっていると

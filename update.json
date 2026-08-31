@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.8.6",
+  "version": "1.8.7",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.8.6\n「症状・ご希望」を「ご相談内容」に変更（フォーム・CSV・スプレッドシートの見出しをまとめて）。例文も差し替え。"
+    "changelog": "1.8.7\n通知先メールをカンマ区切りで複数保存できるようにした（入力欄がブラウザ側で1件しか認めていなかった）。全角読点や空白で書いても自動で整える。"
   }
 }

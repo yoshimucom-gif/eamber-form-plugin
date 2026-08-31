@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.12.0
+ * Version: 1.12.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.12.0');
+define('EAF_VER', '1.12.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -2647,6 +2647,10 @@ function eaf_form_css() {
     /* ★3列固定。auto-fit にすると広い画面で7列＋2列のような割れ方をして、
        タイルが横に伸びきり一覧として読みづらくなる。9枚なので3×3がきれいに収まる。 */
     .fhs-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    /* ★1枚ぶんの枠。隠しラジオの位置をこの中に閉じ込めるためのもの。
+       ここを外すと、押したときに画面が上へ飛ぶ不具合が戻る。 */
+    .fhs-tile-cell,.fhs-choice-cell{position:relative;display:flex;min-width:0}
+    .fhs-wrap .fhs-tile,.fhs-wrap .fhs-choice-opt{flex:1 1 auto;min-width:0}
     .fhs-wrap .fhs-tile-input,.fhs-wrap input[type=radio].fhs-tile-input{position:absolute;opacity:0;width:1px;height:1px;padding:0;border:0;pointer-events:none;appearance:none;-webkit-appearance:none}
     .fhs-wrap .fhs-tile{
       display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;
@@ -3751,6 +3755,9 @@ function eaf_shortcode($atts = array()) {
         $short = isset($GLOBALS['EAF_PTYPE_SHORT'][$k]) ? $GLOBALS['EAF_PTYPE_SHORT'][$k] : $v;
         $note  = isset($GLOBALS['EAF_PTYPE_NOTE'][$k])  ? $GLOBALS['EAF_PTYPE_NOTE'][$k]  : '';
         $tid = $uid . '-tile-' . $k; ?>
+          <?php /* ★1枚ずつ枠で包む。包まないと隠しラジオが全部グリッドの左上に
+                   置かれ、押した瞬間そこへスクロールして上に飛ぶ。 */ ?>
+          <div class="fhs-tile-cell">
           <input type="radio" name="<?php echo esc_attr($name); ?>" id="<?php echo esc_attr($tid); ?>" value="<?php echo esc_attr($k); ?>" class="fhs-tile-input">
           <label class="fhs-tile fhs-tile-<?php echo esc_attr($k); ?>" for="<?php echo esc_attr($tid); ?>">
             <?php echo eaf_ptype_icon($k); ?>
@@ -3759,6 +3766,7 @@ function eaf_shortcode($atts = array()) {
             <span class="fhs-tile-n"><?php echo esc_html($note); ?></span>
 <?php endif; ?>
           </label>
+          </div>
 <?php endforeach; ?>
         </div>
 <?php return ob_get_clean();
@@ -3820,8 +3828,10 @@ function eaf_shortcode($atts = array()) {
           <div class="fhs-choice" role="radiogroup" aria-label="<?php echo esc_attr($fd['label']); ?>">
 <?php foreach (eaf_opt_list($fd['opts']) as $oi => $o):
         $cid = $id . '-c' . (int) $oi; ?>
+            <div class="fhs-choice-cell">
             <input type="radio" name="<?php echo esc_attr($nm . '__pick'); ?>" id="<?php echo esc_attr($cid); ?>" value="<?php echo esc_attr($o); ?>" class="fhs-choice-in" data-for="<?php echo esc_attr($id); ?>">
             <label class="fhs-choice-opt" for="<?php echo esc_attr($cid); ?>"><?php echo esc_html($o); ?></label>
+            </div>
 <?php endforeach; ?>
           </div>
 <?php elseif ($fd['type'] === 'textarea'): ?>

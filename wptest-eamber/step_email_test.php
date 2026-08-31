@@ -82,6 +82,19 @@ t('問いかけが見出しとして出る',       strpos($html, 'どんなこ�
 /* 自由記述の見出しは、タイルの問いかけと同じ文言にしない（同じ画面で2回同じことを言う） */
 t('自由記述の見出しはお問い合わせ内容', strpos($html, '>お問い合わせ内容') !== false, true);
 t('見出しがタイルの問いかけと重複しない', strpos($html, '>どんなことでお困りですか<') !== false, false);
+/* ★タイルは1枚ずつ枠で包む。包まないと、隠しラジオが9つとも
+     グリッドの左上に置かれる（CSSグリッドの決まり）。ラベルを押すと
+     ブラウザが対応するラジオへフォーカスを移し、その位置までスクロールするため、
+     下の段のタイルほど画面が上に飛ぶ。スマホで実測して271px飛んでいた。 */
+t('タイルは1枚ずつ枠で包む',   substr_count($html, 'class="fhs-tile-cell"'), 9);
+t('ラジオは枠の中にある',
+  preg_match('/<div class="fhs-tile-cell">\s*<input type="radio"[^>]*class="fhs-tile-input"/', $html) === 1, true);
+t('枠は位置の基準になっている',
+  strpos(fake_inline_style(), '.fhs-tile-cell,.fhs-choice-cell{position:relative') !== false, true);
+t('法人のカードも同じように包む', substr_count($html, 'class="fhs-choice-cell"'), 6);
+t('カードのラジオも枠の中',
+  preg_match('/<div class="fhs-choice-cell">\s*<input type="radio"[^>]*class="fhs-choice-in"/', $html) === 1, true);
+
 /* ★ラジオはタイルの直前に置く。間に要素が挟まると隣接セレクタ（+）が外れ、
      選択しても色が変わらないフォームになる。 */
 t('ラジオとタイルが隣接している',

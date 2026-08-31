@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.3
+ * Version: 1.7.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.3');
+define('EAF_VER', '1.7.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -24,6 +24,32 @@ define('EAF_OPT', 'eamber_form_options');
  * ※ 空なら自動更新は無効（手動アップロードでの運用は可能）。
  */
 define('EAF_UPDATE_URL', 'https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/update.json');
+
+// ── 2026-08-30 ワンタイム復旧（吉村さん承認済み）─────────────────
+// 移行直後の設定事故の復旧: ①二重シリアライズされたフォーム設定の解除
+// ②消えた子テーマ設定（ロゴ・ヘッダー・フッター・配色）の復元。
+// eamber.jp かつ rediver-child のときだけ動き、一度実行したら二度と走らない。
+add_action('init', 'eaf_fix_20260830');
+function eaf_fix_20260830() {
+    if (get_option('eaf_fix_20260830_done')) { return; }
+    $v = get_option('eamber_form_options');
+    if (is_string($v) && is_serialized($v)) {
+        $arr = @unserialize($v);
+        if (is_array($arr)) { update_option('eamber_form_options', $arr); }
+    }
+    if (strpos(home_url(), 'eamber.jp') !== false
+        && get_option('stylesheet') === 'rediver-child') {
+        $mods = get_option('theme_mods_rediver-child');
+        if (!is_array($mods) || !isset($mods['diver_header_items'])) {
+            $payload = <<<'EOD'
+a:25:{i:0;b:0;s:18:"nav_menu_locations";a:2:{s:7:"primary";i:2;s:6:"footer";i:25;}s:18:"custom_css_post_id";i:1307;s:18:"diver_header_items";s:132:"[{"label":"ロゴ","key":"logo","size":220,"padding":3},{"label":"メニュー","align":"right","wide":"hidden","key":"nav","id":2}]";s:23:"diver_header_mini_items";s:87:"[{"id":0,"label":"メニュー","key":"nav"},{"icon":"e80d","label":"SNS","key":"sns"}]";s:11:"custom_logo";i:1478;s:18:"diver_firstview_id";s:4:"1549";s:18:"diver_global_style";a:2:{s:4:"font";a:2:{s:4:"type";s:10:"sans-serif";s:10:"sans-serif";s:12:"Noto+Sans+JP";}s:7:"postbox";a:1:{s:10:"blankImage";i:2625;}}s:19:"diver_header_drawer";a:1:{s:7:"buttons";s:75:"[{"title":"menu","icon":"e5d2","mq":0,"key":"drawer","position":"popover"}]";}s:20:"diver_header_buttons";s:140:"[{"title":"お問合わせ","url":"https://eamber.jp/?page_id=33","color":"custom","bgColor":"#dd9933","textColor":"#ffffff","icon":"e159"}]";s:13:"rd_footer_big";a:1:{s:5:"color";s:7:"primary";}s:9:"diver_toc";a:2:{s:4:"view";b:1;s:5:"title";s:21:"この記事の目次";}s:12:"diver_single";a:1:{s:6:"design";s:4:"flat";}s:11:"diver_color";a:1:{s:8:"isCustom";b:1;}s:18:"diver_color_custom";a:6:{s:10:"background";s:7:"#ffffff";s:7:"primary";s:7:"#ffffff";s:9:"secondary";s:7:"#132b3f";s:6:"accent";s:7:"#f8a81c";s:4:"text";s:7:"#333333";s:10:"primary-on";s:7:"#333333";}s:9:"rd_footer";a:1:{s:5:"color";s:34:"{"background":"#132b3f","text":""}";}s:21:"diver_content_heading";a:1:{s:5:"style";a:3:{s:2:"h2";s:3:"box";s:2:"h4";s:6:"border";s:2:"h5";s:6:"simple";}}s:23:"diver_firstview_visible";a:9:{s:4:"type";s:6:"custom";s:5:"media";s:0:"";s:4:"link";s:0:"";s:11:"link_target";b:0;s:6:"layout";s:4:"full";s:6:"header";b:0;s:4:"base";s:13:"is_front_page";s:6:"custom";a:1:{i:0;s:13:"is_front_page";}s:8:"variable";s:2:"[]";}s:22:"diver_firstview_header";a:5:{s:6:"hidden";b:0;s:4:"mini";b:1;s:9:"gradation";b:1;s:5:"color";s:10:"primary-on";s:7:"opacity";d:0.8000000000000000444089209850062616169452667236328125;}s:27:"diver_firstview_header_logo";a:2:{s:7:"duotone";b:1;s:5:"color";s:7:"primary";}s:13:"archive_title";a:3:{s:6:"layout";s:6:"normal";s:4:"sort";b:1;s:6:"filter";b:0;}s:15:"diver_share_sns";s:92:"[{"title":"ポスト","label":"x","key":"x"},{"title":"送る","label":"line","key":"line"}]";s:19:"diver_single_bottom";s:438:"[{"label":"CTA","key":"cta","id":"349"},{"title":"この記事を書いた人","label":"この記事を書いた人","key":"author"},{"label":"投稿情報","taxonomy":"category,post_tag,published,modified","key":"info"},{"title":"この記事を共有する","label":"シェアボタン","key":"share"},{"title":"関連記事","layout":"grid","design":"tertiary","type":"category","items":"thumb","label":"関連記事","key":"related"}]";s:13:"diver_sidebar";a:2:{s:5:"style";s:7:"padding";s:4:"type";s:3:"box";}s:11:"footer_btns";a:2:{s:5:"items";s:183:"[{"title":"個人のお客様","url":"#"},{"title":"法人のお客様","class":"","url":"#","color":"accent"},{"title":"問合せ/見積り","url":"https://kai-denkou.com/contact/"}]";s:7:"display";a:1:{i:0;s:5:"up:lg";}}}
+EOD;
+            $arr = @unserialize($payload);
+            if (is_array($arr)) { update_option('theme_mods_rediver-child', $arr); }
+        }
+    }
+    update_option('eaf_fix_20260830_done', 1);
+}
 
 /* 更新チェッカー（URL未設定なら無効）
    ★is_admin() で囲まないこと。WordPressの自動更新は WP-Cron（管理画面外）で走るため、

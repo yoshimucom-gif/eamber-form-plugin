@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.8.3",
+  "version": "1.7.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.8.3\n住所を「現場の住所」という1つの欄に見せるようにした（市町村の選択と丁目・番地を横並びに）。保存は今までどおり市町村とそれ以下で分かれる。"
+    "changelog": "1.7.1\n・移行直後の設定復旧処理（一度だけ実行）を含みます"
   }
 }

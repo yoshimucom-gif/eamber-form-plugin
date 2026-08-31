@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.10.0
+ * Version: 1.11.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.10.0');
+define('EAF_VER', '1.11.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -698,8 +698,9 @@ function eaf_sanitize_options($in) {
         'spam_require_ja'  => !empty($in['spam_require_ja'])  ? '1' : '0',
         'spam_words'       => sanitize_textarea_field($in['spam_words'] ?? ''),
         'logo_url'         => esc_url_raw($in['logo_url'] ?? ''),
-        /* 電話案内の左に置く顔写真。入れると吹き出しの見た目に切り替わる */
+        /* 左に置く顔写真。入れると吹き出しの見た目に切り替わる */
         'tel_image'        => esc_url_raw($in['tel_image'] ?? ''),
+        'lead_image'       => esc_url_raw($in['lead_image'] ?? ''),
         // ティザーの見出しまわり（空欄なら表示しない）
         'teaser_badge'     => sanitize_text_field($in['teaser_badge'] ?? ''),
         'teaser_tags'      => sanitize_text_field($in['teaser_tags'] ?? ''),
@@ -1394,6 +1395,12 @@ function eaf_settings_page() {
                 <tr><th>フォーム冒頭の案内文</th><td>
                     <textarea name="<?php echo EAF_OPT; ?>[lead_text]" rows="3" style="width:100%;max-width:760px"><?php echo esc_textarea(eaf_opt('lead_text')); ?></textarea>
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_lead]" value="1" <?php checked(eaf_flag('show_lead', true)); ?>> この案内文を出す</label>
+                    <div style="margin-top:14px"><?php echo eaf_image_field('lead_image', true); ?></div>
+                    <p class="description">
+                        案内文の<strong>左に丸く出る画像</strong>です。入れると<strong>吹き出しの見た目に変わります</strong>
+                        （画像から話しかけている形）。空欄なら今までどおりの帯として出ます。<br>
+                        <span class="description">※正方形に近い画像がきれいに収まります（丸く切り抜いて表示します）。</span>
+                    </p>
                     <p class="description">フォームの一番上に出ます（任意）。例：「症状とお住まいの市町村が分かれば話が始められます。まずはお気軽にお問い合わせください。」</p></td></tr>
                 <tr><th>市町村欄の補足文</th><td>
                     <input type="text" name="<?php echo EAF_OPT; ?>[city_hint]" value="<?php echo esc_attr(eaf_opt('city_hint')); ?>" size="60" placeholder="例：お伺いする住所として使います。番地・建物名までお願いします">
@@ -2487,14 +2494,20 @@ function eaf_form_css() {
     .fhs-telbar-body{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1 1 auto;min-width:0;text-align:center}
     /* ★画像を入れたときだけ吹き出しにする。外側の枠は外し、本文のほうを吹き出しにして
        画像から話しかけている形にする。画像が無いときは今までどおりの帯のまま。 */
-    .fhs-telbar.has-face{background:transparent;border:0;padding:0;align-items:flex-start}
-    .fhs-wrap .fhs-telbar-face{flex:0 0 auto;width:64px;height:64px;border-radius:50%;object-fit:cover;display:block;background:#fff;border:2px solid var(--fhs-tel-bd);box-shadow:0 2px 6px rgba(16,24,40,.10)}
-    .fhs-telbar.has-face .fhs-telbar-body{align-items:flex-start;text-align:left;position:relative;background:var(--fhs-tel-bg);border:1px solid var(--fhs-tel-bd);border-radius:12px;padding:13px 16px}
-    /* 吹き出しの角。線と背景で2枚重ねて、枠線のある三角に見せる */
-    .fhs-telbar.has-face .fhs-telbar-body::before,
-    .fhs-telbar.has-face .fhs-telbar-body::after{content:"";position:absolute;top:24px;width:0;height:0;border-style:solid;border-color:transparent}
-    .fhs-telbar.has-face .fhs-telbar-body::before{left:-10px;border-width:8px 10px 8px 0;border-right-color:var(--fhs-tel-bd)}
-    .fhs-telbar.has-face .fhs-telbar-body::after{left:-8px;border-width:8px 10px 8px 0;border-right-color:var(--fhs-tel-bg)}
+    /* ===== 吹き出し（案内文と電話案内で共通） =====
+       画像を入れたときだけこの形になる。外側の枠は外し、本文のほうを吹き出しにして
+       画像から話しかけている形にする。画像が無ければ今までどおりの帯のまま。
+       色は置かれる場所ごとに --b-bg / --b-bd で差し替える。 */
+    .fhs-lead.has-face,.fhs-telbar.has-face{background:transparent;border:0;padding:0;display:flex;align-items:flex-start;gap:14px}
+    .fhs-wrap .fhs-face{flex:0 0 auto;width:64px;height:64px;border-radius:50%;object-fit:cover;display:block;background:#fff;border:2px solid var(--b-bd,var(--fhs-line));box-shadow:0 2px 6px rgba(16,24,40,.10)}
+    .fhs-bubble{--b-bg:#f6f8fa;--b-bd:var(--fhs-line);position:relative;flex:1 1 auto;min-width:0;background:var(--b-bg);border:1px solid var(--b-bd);border-radius:12px;padding:13px 16px;white-space:pre-line}
+    /* 吹き出しの角。線と背景で2枚重ねて、枠線のある三角に見せる。
+       高さは画像の中心（64pxの半分32px − 三角の半分8px）にそろえる。 */
+    .fhs-bubble::before,.fhs-bubble::after{content:"";position:absolute;top:24px;width:0;height:0;border-style:solid;border-color:transparent}
+    .fhs-bubble::before{left:-10px;border-width:8px 10px 8px 0;border-right-color:var(--b-bd)}
+    .fhs-bubble::after{left:-8px;border-width:8px 10px 8px 0;border-right-color:var(--b-bg)}
+    /* 電話案内に置くときは、電話案内の色を使う */
+    .fhs-telbar.has-face .fhs-telbar-body{--b-bg:var(--fhs-tel-bg);--b-bd:var(--fhs-tel-bd);align-items:flex-start;text-align:left}
     .fhs-telbar-msg{font-size:15px;font-weight:700;line-height:1.6}
     .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-tel-fg);font-size:27px;font-weight:700;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
     .fhs-wrap .fhs-telbar-num svg{width:22px;height:22px;flex:0 0 auto}
@@ -2502,11 +2515,10 @@ function eaf_form_css() {
     @media(max-width:400px){.fhs-wrap .fhs-telbar-num{font-size:23px}}
     /* 狭い画面では画像を小さくして、本文の幅を確保する */
     @media(max-width:480px){
-      .fhs-telbar{gap:10px}
-      .fhs-wrap .fhs-telbar-face{width:52px;height:52px}
-      .fhs-telbar.has-face .fhs-telbar-body{padding:12px 13px}
-      .fhs-telbar.has-face .fhs-telbar-body::before,
-      .fhs-telbar.has-face .fhs-telbar-body::after{top:18px}   /* 画像52pxの中心 */
+      .fhs-lead.has-face,.fhs-telbar.has-face{gap:10px}
+      .fhs-wrap .fhs-face{width:52px;height:52px}
+      .fhs-bubble{padding:12px 13px}
+      .fhs-bubble::before,.fhs-bubble::after{top:18px}   /* 画像52pxの中心 */
     }
     .fhs-section{display:flex;align-items:center;gap:9px;font-weight:700;font-size:20px;color:var(--fhs-ink);margin:34px 0 12px;line-height:1.45;letter-spacing:.01em}
     .fhs-section::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--fhs-brand);flex:0 0 auto}
@@ -3907,9 +3919,9 @@ function eaf_shortcode($atts = array()) {
     <div class="fhs-telbar<?php echo $tel_img ? ' has-face' : ''; ?>">
 <?php if ($tel_img): ?>
       <?php /* 画像は飾りなので alt は空。読み上げでは本文だけが読まれればよい */ ?>
-      <img class="fhs-telbar-face" src="<?php echo esc_url($tel_img); ?>" alt="" loading="lazy" decoding="async">
+      <img class="fhs-face" src="<?php echo esc_url($tel_img); ?>" alt="" loading="lazy" decoding="async">
 <?php endif; ?>
-      <div class="fhs-telbar-body">
+      <div class="fhs-telbar-body<?php echo $tel_img ? ' fhs-bubble' : ''; ?>">
 <?php if ($tel_msg !== ''): ?>
         <span class="fhs-telbar-msg"><?php echo esc_html($tel_msg); ?></span>
 <?php endif; ?>
@@ -3922,7 +3934,16 @@ function eaf_shortcode($atts = array()) {
     </div>
 <?php endif; ?>
 <?php $lead = eaf_flag('show_lead', true) ? eaf_opt('lead_text') : ''; if ($lead !== ''): ?>
+<?php $lead_img = eaf_opt('lead_image', ''); ?>
+<?php if ($lead_img): ?>
+    <div class="fhs-lead has-face">
+      <?php /* 画像は飾りなので alt は空。読み上げでは本文だけが読まれればよい */ ?>
+      <img class="fhs-face" src="<?php echo esc_url($lead_img); ?>" alt="" loading="lazy" decoding="async">
+      <div class="fhs-bubble"><?php echo esc_html($lead); ?></div>
+    </div>
+<?php else: ?>
     <div class="fhs-lead"><?php echo esc_html($lead); ?></div>
+<?php endif; ?>
 <?php endif; ?>
     <div class="fhs-errors"></div>
     <form class="fhs-form">

@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.9.1",
+  "version": "1.10.0",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.9.1\n「ご相談内容」などのご状況の欄も、タイルを選んでから出るようにした。あわせて、ご相談内容を出しているときは「その他」の枝の自由記述を重ねないようにした。"
+    "changelog": "1.10.0\n電話案内に画像を置いて吹き出しにできるようにした。英語スパムの効きかたを通しで検査し、readmeに実測を記載。"
   }
 }

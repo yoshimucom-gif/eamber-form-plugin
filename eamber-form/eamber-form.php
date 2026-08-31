@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.9.1
+ * Version: 1.10.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.9.1');
+define('EAF_VER', '1.10.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -698,6 +698,8 @@ function eaf_sanitize_options($in) {
         'spam_require_ja'  => !empty($in['spam_require_ja'])  ? '1' : '0',
         'spam_words'       => sanitize_textarea_field($in['spam_words'] ?? ''),
         'logo_url'         => esc_url_raw($in['logo_url'] ?? ''),
+        /* 電話案内の左に置く顔写真。入れると吹き出しの見た目に切り替わる */
+        'tel_image'        => esc_url_raw($in['tel_image'] ?? ''),
         // ティザーの見出しまわり（空欄なら表示しない）
         'teaser_badge'     => sanitize_text_field($in['teaser_badge'] ?? ''),
         'teaser_tags'      => sanitize_text_field($in['teaser_tags'] ?? ''),
@@ -1334,6 +1336,14 @@ function eaf_settings_page() {
                     <span class="description">※ハイフンありで入れると読みやすくなります（例：<code>090-3451-6042</code>）。表示は入力したとおりに出ます。</span></p>
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_telbar]" value="1" <?php checked(eaf_flag('show_telbar', true)); ?>> <strong>フォームの冒頭にも電話案内として出す</strong></label>
                     <p class="description">外してもメールの署名には残ります。工事の問い合わせは急ぎが多く、電話が最短の導線なので、既定では出しています。</p></td></tr>
+                <tr><th>電話案内の画像</th><td>
+                    <?php echo eaf_image_field('tel_image', true); ?>
+                    <p class="description">
+                        電話案内の<strong>左に丸く出る画像</strong>です。担当者の顔写真やロゴを想定しています。<br>
+                        <strong>入れると吹き出しの見た目に変わります</strong>（画像から話しかけている形）。
+                        空欄なら今までどおり、中央ぞろえの帯として出ます。<br>
+                        <span class="description">※正方形に近い画像がきれいに収まります（丸く切り抜いて表示します）。</span>
+                    </p></td></tr>
                 <tr><th>電話案内のメッセージ</th><td>
                     <input type="text" name="<?php echo EAF_OPT; ?>[tel_message]" value="<?php echo esc_attr(eaf_opt('tel_message')); ?>" size="50" placeholder="お急ぎの方はお電話ください。"><br>
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_tel_message]" value="1" <?php checked(eaf_flag('show_tel_message', true)); ?>> この一行を出す</label>
@@ -2473,12 +2483,31 @@ function eaf_form_css() {
     .fhs-req.fhs-done{background:var(--fhs-brand);color:#fff;border-radius:50%;width:20px;height:20px;padding:0;font-size:12px;justify-content:center}
     .fhs-lead{background:#f6f8fa;border:1px solid var(--fhs-line);border-radius:10px;padding:14px 16px;font-size:16px;color:#374151;margin-bottom:20px;white-space:pre-line}
     /* フォーム冒頭の電話案内。急ぎの読者が最初に目にする位置に置く */
-    .fhs-telbar{display:flex;flex-direction:column;align-items:center;gap:3px;background:var(--fhs-tel-bg);border:1px solid var(--fhs-tel-bd);border-radius:8px;padding:14px 16px;color:var(--fhs-tel-fg);margin-bottom:18px;text-align:center}
+    .fhs-telbar{display:flex;align-items:center;gap:14px;background:var(--fhs-tel-bg);border:1px solid var(--fhs-tel-bd);border-radius:8px;padding:14px 16px;color:var(--fhs-tel-fg);margin-bottom:18px}
+    .fhs-telbar-body{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1 1 auto;min-width:0;text-align:center}
+    /* ★画像を入れたときだけ吹き出しにする。外側の枠は外し、本文のほうを吹き出しにして
+       画像から話しかけている形にする。画像が無いときは今までどおりの帯のまま。 */
+    .fhs-telbar.has-face{background:transparent;border:0;padding:0;align-items:flex-start}
+    .fhs-wrap .fhs-telbar-face{flex:0 0 auto;width:64px;height:64px;border-radius:50%;object-fit:cover;display:block;background:#fff;border:2px solid var(--fhs-tel-bd);box-shadow:0 2px 6px rgba(16,24,40,.10)}
+    .fhs-telbar.has-face .fhs-telbar-body{align-items:flex-start;text-align:left;position:relative;background:var(--fhs-tel-bg);border:1px solid var(--fhs-tel-bd);border-radius:12px;padding:13px 16px}
+    /* 吹き出しの角。線と背景で2枚重ねて、枠線のある三角に見せる */
+    .fhs-telbar.has-face .fhs-telbar-body::before,
+    .fhs-telbar.has-face .fhs-telbar-body::after{content:"";position:absolute;top:24px;width:0;height:0;border-style:solid;border-color:transparent}
+    .fhs-telbar.has-face .fhs-telbar-body::before{left:-10px;border-width:8px 10px 8px 0;border-right-color:var(--fhs-tel-bd)}
+    .fhs-telbar.has-face .fhs-telbar-body::after{left:-8px;border-width:8px 10px 8px 0;border-right-color:var(--fhs-tel-bg)}
     .fhs-telbar-msg{font-size:15px;font-weight:700;line-height:1.6}
     .fhs-wrap .fhs-telbar-num{display:inline-flex;align-items:center;gap:7px;color:var(--fhs-tel-fg);font-size:27px;font-weight:700;text-decoration:none;letter-spacing:.02em;line-height:1.25;white-space:nowrap}
     .fhs-wrap .fhs-telbar-num svg{width:22px;height:22px;flex:0 0 auto}
     .fhs-telbar-sub{font-size:12.5px;font-weight:500;color:var(--fhs-tel-fg);opacity:.72;line-height:1.6}
     @media(max-width:400px){.fhs-wrap .fhs-telbar-num{font-size:23px}}
+    /* 狭い画面では画像を小さくして、本文の幅を確保する */
+    @media(max-width:480px){
+      .fhs-telbar{gap:10px}
+      .fhs-wrap .fhs-telbar-face{width:52px;height:52px}
+      .fhs-telbar.has-face .fhs-telbar-body{padding:12px 13px}
+      .fhs-telbar.has-face .fhs-telbar-body::before,
+      .fhs-telbar.has-face .fhs-telbar-body::after{top:18px}   /* 画像52pxの中心 */
+    }
     .fhs-section{display:flex;align-items:center;gap:9px;font-weight:700;font-size:20px;color:var(--fhs-ink);margin:34px 0 12px;line-height:1.45;letter-spacing:.01em}
     .fhs-section::before{content:"";width:10px;height:10px;border-radius:50%;background:var(--fhs-brand);flex:0 0 auto}
     .fhs-form > .fhs-section:first-child{margin-top:0}
@@ -3680,6 +3709,7 @@ function eaf_shortcode($atts = array()) {
     /* 文言はそのまま残し、出す・出さないだけをチェックで切り替える */
     $tel_msg = eaf_flag('show_tel_message', true) ? eaf_opt('tel_message', 'お急ぎの方はお電話ください。') : '';
     $tel_sub = eaf_flag('show_tel_sub', true)     ? eaf_opt('tel_submessage', '') : '';
+    $tel_img = eaf_opt('tel_image', '');
 
     /* ★同意はプライバシーポリシーの1本だけ。
        免責事項はフォーク元（価格を示す査定フォーム）で要ったもので、
@@ -3874,15 +3904,21 @@ function eaf_shortcode($atts = array()) {
           </form>
 <?php else: /* ===== 通常のフォーム ===== */ ?>
 <?php if ($op_tel !== '' && eaf_flag('show_telbar', true)): ?>
-    <div class="fhs-telbar">
+    <div class="fhs-telbar<?php echo $tel_img ? ' has-face' : ''; ?>">
+<?php if ($tel_img): ?>
+      <?php /* 画像は飾りなので alt は空。読み上げでは本文だけが読まれればよい */ ?>
+      <img class="fhs-telbar-face" src="<?php echo esc_url($tel_img); ?>" alt="" loading="lazy" decoding="async">
+<?php endif; ?>
+      <div class="fhs-telbar-body">
 <?php if ($tel_msg !== ''): ?>
-      <span class="fhs-telbar-msg"><?php echo esc_html($tel_msg); ?></span>
+        <span class="fhs-telbar-msg"><?php echo esc_html($tel_msg); ?></span>
 <?php endif; ?>
-      <a class="fhs-telbar-num" href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h3l1.5 4-2 1.4a11 11 0 0 0 5.1 5.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z"/></svg><?php echo esc_html($op_tel); ?></a>
+        <a class="fhs-telbar-num" href="tel:<?php echo esc_attr(preg_replace('/[^0-9+]/', '', $op_tel)); ?>">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h3l1.5 4-2 1.4a11 11 0 0 0 5.1 5.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7a2 2 0 0 1 2-2.2Z"/></svg><?php echo esc_html($op_tel); ?></a>
 <?php if ($tel_sub !== ''): ?>
-      <span class="fhs-telbar-sub"><?php echo esc_html($tel_sub); ?></span>
+        <span class="fhs-telbar-sub"><?php echo esc_html($tel_sub); ?></span>
 <?php endif; ?>
+      </div>
     </div>
 <?php endif; ?>
 <?php $lead = eaf_flag('show_lead', true) ? eaf_opt('lead_text') : ''; if ($lead !== ''): ?>

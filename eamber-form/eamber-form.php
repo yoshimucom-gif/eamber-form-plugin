@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.8.7
+ * Version: 1.9.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.8.7');
+define('EAF_VER', '1.9.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -710,6 +710,10 @@ function eaf_sanitize_options($in) {
         'color_tel_bd'     => sanitize_hex_color($in['color_tel_bd'] ?? '')   ?: '#DCE2EB',
         'color_tel_fg'     => sanitize_hex_color($in['color_tel_fg'] ?? '')   ?: '#1E3050',
         'color_next'       => sanitize_hex_color($in['color_next'] ?? '')     ?: '#EFC24A',
+        /* ★進み具合のバーは空欄を許す。空欄＝ボタンと同じ色に追従する、という意味。
+           ここに既定色を入れてしまうと、ボタンの色を変えてもバーが取り残される。 */
+        'color_step_on'    => sanitize_hex_color($in['color_step_on'] ?? '')   ?: '',
+        'color_step_off'   => sanitize_hex_color($in['color_step_off'] ?? '')  ?: '#E5E7EB',
     );
     // 各項目のモード（必須／任意／非表示）。スキーマを回して必ず明示値を保存する
     foreach (eaf_all_groups() as $g => $flds) {
@@ -1590,7 +1594,7 @@ function eaf_settings_page() {
                 <tr><th>ボタンの背景色</th><td>
                     <?php echo eaf_color_field('color_btn_bg', '#E8A33D'); ?>
                     <p class="description">
-                        送信ボタン・「次へ進む」ボタン、そして<strong>進み具合のバー</strong>の色。<strong>空欄なら <code>#E8A33D</code>（アンバー）</strong>です。<br>
+                        送信ボタン・「次へ進む」ボタンの色。<strong>空欄なら <code>#E8A33D</code>（アンバー）</strong>です。<br>
                         <strong>行動をうながす色</strong>なので、サイトの「お問合せ」ボタンと同じ色にするのが自然です。
                         進み具合のバーを同じ色にしてあるのは、向かっている先とバーの色を結びつけるためです。
                     </p>
@@ -1620,6 +1624,19 @@ function eaf_settings_page() {
                     <p class="description">背景と同じ色にすれば、線を消したように見せられます。</p></td></tr>
                 <tr><th>文字色</th><td><?php echo eaf_color_field('color_tel_fg', '#1E3050'); ?>
                     <p class="description">メッセージ・電話番号・サブメッセージに使われます（サブは少し薄く表示）。</p></td></tr>
+            </table>
+
+            <h3>進み具合のバーの色</h3>
+            <p class="description">フォームの上に出る「STEP 1 / 2」のバーの色です。</p>
+            <table class="form-table">
+                <tr><th>進んだところ</th><td><?php echo eaf_color_field('color_step_on', eaf_opt('color_btn_bg', '') ?: '#E8A33D'); ?>
+                    <p class="description">
+                        バーの塗られている部分と、「STEP <strong>1</strong> / 2」の数字の色です。<br>
+                        <strong>初期値はボタンと同じ色</strong>にしてあります。向かっている先（ボタン）とバーの色を
+                        結びつけると、あと何回押せば終わるのかが直感的に分かるためです。
+                    </p></td></tr>
+                <tr><th>これからのところ</th><td><?php echo eaf_color_field('color_step_off', '#E5E7EB'); ?>
+                    <p class="description">バーのまだ進んでいない部分の色です。<strong>目立たせないほうが、進んだ部分が見えます。</strong></p></td></tr>
             </table>
 
             <h3>次に入力する欄の色</h3>
@@ -2413,8 +2430,12 @@ function eaf_form_css() {
     /* 次に入力する欄の点滅。ブランド色だと灰色っぽく沈んで気づきにくいので別に持つ */
     $c_next      = eaf_opt('color_next', '#EFC24A');
     $c_next_rgb  = eaf_hex_to_rgb($c_next);
+    /* 進み具合のバー。未指定のあいだはボタンと同じ色に追従する
+       （ボタンの色を決めただけでバーもそろう。決め直したい人だけ別に選ぶ） */
+    $c_step_on   = eaf_opt('color_step_on', '') ?: $c_btn_bg;
+    $c_step_off  = eaf_opt('color_step_off', '#E5E7EB');
     ob_start(); ?>
-    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-tel-bg:<?php echo esc_attr($c_tel_bg); ?>;--fhs-tel-bd:<?php echo esc_attr($c_tel_bd); ?>;--fhs-tel-fg:<?php echo esc_attr($c_tel_fg); ?>;--fhs-next-rgb:<?php echo esc_attr($c_next_rgb); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75;font-size:17px}
+    .fhs-wrap{--fhs-brand:<?php echo esc_attr($c_brand); ?>;--fhs-brand-rgb:<?php echo esc_attr($c_brand_rgb); ?>;--fhs-btn-text:<?php echo esc_attr($c_btn_text); ?>;--fhs-btn-bg:<?php echo esc_attr($c_btn_bg); ?>;--fhs-title:<?php echo esc_attr($c_title); ?>;--fhs-badge-bg:<?php echo esc_attr($c_badge); ?>;--fhs-tel-bg:<?php echo esc_attr($c_tel_bg); ?>;--fhs-tel-bd:<?php echo esc_attr($c_tel_bd); ?>;--fhs-tel-fg:<?php echo esc_attr($c_tel_fg); ?>;--fhs-next-rgb:<?php echo esc_attr($c_next_rgb); ?>;--fhs-step-on:<?php echo esc_attr($c_step_on); ?>;--fhs-step-off:<?php echo esc_attr($c_step_off); ?>;--fhs-ink:#1a1f36;--fhs-muted:#6b7280;--fhs-line:#e5e7eb;width:100%;max-width:none;margin:0 auto;color:var(--fhs-ink);font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;line-height:1.75;font-size:17px}
     /* テーマ側が box-sizing を当てているかどうかで、余白ぶん高さ・幅がずれる。
        このフォームの中だけは border-box に固定して、どのテーマでも同じ見た目にする。 */
     .fhs-wrap,.fhs-wrap *{box-sizing:border-box}
@@ -2474,12 +2495,12 @@ function eaf_form_css() {
     .fhs-wrap .fhs-formstep{display:block}
     .fhs-steps{margin-bottom:22px}
     .fhs-stepbar{display:flex;gap:6px}
-    .fhs-stepdot{flex:1;height:6px;border-radius:3px;background:#e5e7eb;transition:background .25s}
+    .fhs-stepdot{flex:1;height:6px;border-radius:3px;background:var(--fhs-step-off);transition:background .25s}
     /* ★進み具合はボタンと同じ色で塗る。向かっている先と同じ色にすると、
        どこまで来たかが一目で結びつく */
-    .fhs-stepdot.is-on{background:var(--fhs-btn-bg)}
+    .fhs-stepdot.is-on{background:var(--fhs-step-on)}
     .fhs-stepnow{margin-top:9px;font-size:14px;font-weight:700;color:var(--fhs-muted)}
-    .fhs-stepnow b{color:var(--fhs-btn-bg)}
+    .fhs-stepnow b{color:var(--fhs-step-on)}
     .fhs-nav{display:flex;gap:12px;align-items:stretch}
     .fhs-nav button{margin-top:24px}
     .fhs-wrap .fhs-back{flex:0 0 34%;background:#fff;color:var(--fhs-muted);border:1px solid #cbd5e1;font-size:17px}

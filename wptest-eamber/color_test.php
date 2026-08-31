@@ -93,6 +93,53 @@ eaf_shortcode(array());
 $css = fake_inline_style();
 /* キューに積むのでタグは含まない。CSS本体が入っていることを見る */
 t('CSSが積まれている',             strpos($css, '.fhs-wrap{--fhs-brand:') !== false, true);
+
+/* --- 進み具合のバーの色 ---
+   ★既定はボタンと同じ色に「追従」する。ここで固定の色を既定にしてしまうと、
+     ボタンの色を変えたときにバーだけ取り残される（本番はボタンが #e65100）。 */
+$bar = function ($opts) {
+    update_option(EAF_OPT, eaf_sanitize_options($opts));
+    fake_assets_reset();
+    eaf_shortcode(array());
+    $c = fake_inline_style();
+    preg_match('/--fhs-step-on:([^;]+);--fhs-step-off:([^;]+);/', $c, $m);
+    return $m ? array(strtolower($m[1]), strtolower($m[2])) : array('', '');
+};
+
+t('既定はボタンの色に追従', $bar(array()), array('#e8a33d', '#e5e7eb'));
+/* ★本番と同じ形：ボタンだけ変えたらバーも一緒に動く */
+t('ボタンを変えるとバーも動く',
+  $bar(array('color_btn_bg' => '#e65100')), array('#e65100', '#e5e7eb'));
+/* 別に決めたらボタンから切り離される */
+t('バーだけ別の色にできる',
+  $bar(array('color_btn_bg' => '#e65100', 'color_step_on' => '#1e3050')),
+  array('#1e3050', '#e5e7eb'));
+t('これからの部分も変えられる',
+  $bar(array('color_step_on' => '#1e3050', 'color_step_off' => '#f1f3f7')),
+  array('#1e3050', '#f1f3f7'));
+t('壊れた値は既定に戻る',
+  $bar(array('color_step_on' => 'あか', 'color_step_off' => 'みどり')),
+  array('#e8a33d', '#e5e7eb'));
+
+/* 塗り分けに実際に使われていること（変数を作っただけで使い忘れると効かない） */
+update_option(EAF_OPT, eaf_sanitize_options(array()));
+fake_assets_reset(); eaf_shortcode(array()); $css2 = fake_inline_style();
+t('進んだ部分に使っている',   strpos($css2, '.fhs-stepdot.is-on{background:var(--fhs-step-on)}') !== false, true);
+t('これからの部分に使っている', strpos($css2, 'background:var(--fhs-step-off)') !== false, true);
+t('STEPの数字にも使っている', strpos($css2, '.fhs-stepnow b{color:var(--fhs-step-on)}') !== false, true);
+t('ボタン色の直接指定は残っていない', strpos($css2, '.fhs-stepdot.is-on{background:var(--fhs-btn-bg)}') !== false, false);
+
+/* 設定画面に欄がある */
+$GLOBALS['FAKE_IS_ADMIN'] = true;
+ob_start(); eaf_settings_page(); $sp = ob_get_clean();
+t('設定画面に「進んだところ」の欄',     strpos($sp, '[color_step_on]') !== false, true);
+t('設定画面に「これからのところ」の欄', strpos($sp, '[color_step_off]') !== false, true);
+$GLOBALS['FAKE_IS_ADMIN'] = false;
+/* ★このまとまりで設定を書き換えたので、この先の検査が見ている状態に戻してから続ける */
+update_option(EAF_OPT, eaf_sanitize_options(array(
+    'color_brand' => '#1f2e43', 'color_btn_bg' => '#ff8a00', 'color_badge' => '#00a86b',
+)));
+fake_assets_reset(); eaf_shortcode(array()); $css = fake_inline_style();
 t('ブランドカラーが入る',           strpos($css, '--fhs-brand:#1f2e43') !== false, true);
 t('ボタン背景を別色にできる',       strpos($css, '--fhs-btn-bg:#ff8a00') !== false, true);
 t('バッジ色が入る',                 strpos($css, '--fhs-badge-bg:#00a86b') !== false, true);

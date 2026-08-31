@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.8.7",
+  "version": "1.9.0",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.8.7\n通知先メールをカンマ区切りで複数保存できるようにした（入力欄がブラウザ側で1件しか認めていなかった）。全角読点や空白で書いても自動で整える。"
+    "changelog": "1.9.0\n進み具合のバーの色を、ボタンとは別に選べるようにした（進んだところ／これからのところ）。未指定のあいだは今までどおりボタンの色に追従する。"
   }
 }

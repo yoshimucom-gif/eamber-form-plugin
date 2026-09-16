@@ -185,12 +185,37 @@ $r = submit(array(
 t('枝の必須が空なら弾く',
   is_array($r) && !empty($r['errors']) && strpos(implode('', $r['errors']), 'ご希望の内容') !== false, true);
 
-echo "\n--- 8. ティザーはそのまま残る ---\n";
+echo "\n--- 8. 設定画面に使い方が載っているか ---\n";
+/* ★readme（配布zipの中）にだけ書いても、使う人の目には入らない。
+     設定画面の「ショートコード」タブに出ていないものは、無いのと同じ。 */
+$GLOBALS['FAKE_IS_ADMIN'] = true;
+ob_start(); eaf_settings_page(); $sp = ob_get_clean();
+$GLOBALS['FAKE_IS_ADMIN'] = false;
+foreach (array(
+    '[eamber_form]'                  => '標準（タイル2ステップ）',
+    '[eamber_form design="simple"]'  => 'シンプル',
+    '[eamber_form design="select"]'  => '選択式',
+    '[eamber_form design="compact"]' => 'コンパクト',
+    '[eamber_form design="card"]'    => 'カード',
+    '[eamber_form design="teaser"]'  => 'ティザー',
+) as $code => $label) {
+    t('設定画面に載っている: ' . $label,
+      strpos($sp, htmlspecialchars($code, ENT_QUOTES)) !== false || strpos($sp, $code) !== false, true);
+}
+t('シンプルの中身を説明している', strpos($sp, '工事内容を聞かず、1画面で終わる形') !== false, true);
+t('選択式の中身を説明している',   strpos($sp, '選んだ内容に応じて次の項目が変わる形') !== false, true);
+/* コピーして貼れる形になっていること（このタブはコピー用の印を使う） */
+t('シンプルはコピーできる',
+  strpos($sp, 'class="fhs-copy-src">[eamber_form design="simple"]') !== false, true);
+t('選択式はコピーできる',
+  strpos($sp, 'class="fhs-copy-src">[eamber_form design="select"]') !== false, true);
+
+echo "\n--- 9. ティザーはそのまま残る ---\n";
 $teaser = eaf_shortcode(array('design' => 'teaser', 'url' => '/contact/'));
 t('ティザーは今までどおり出る', strpos($teaser, 'fhs-design-teaser') !== false, true);
 t('ティザーのタイルも13枚',     substr_count($teaser, 'class="fhs-tile-input"'), 13);
 
-echo "\n--- 9. 自己診断 ---\n";
+echo "\n--- 10. 自己診断 ---\n";
 t('自己診断: 3つの型はそれぞれ違う中身', $simple !== $select && $select !== $normal, true);
 t('自己診断: 知らない型は既定に落ちる',
   strpos(eaf_shortcode(array('design' => 'あいうえお')), 'fhs-design-default') !== false, true);

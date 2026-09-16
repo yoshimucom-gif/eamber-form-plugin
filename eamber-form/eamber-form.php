@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.13.0
+ * Version: 1.13.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.13.0');
+define('EAF_VER', '1.13.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1915,15 +1915,35 @@ function eaf_settings_page() {
 
             <div class="fhs-tabpanel" data-tab="usage" style="display:none">
             <h3>ショートコードの貼り方</h3>
+            <p class="description" style="max-width:900px;margin-bottom:10px">
+                貼りたい固定ページ・投稿に、下のショートコードをそのまま書いてください。
+                <strong>同じサイトの中で別々の型を使い分けても構いません。</strong>
+                反響の届き先（通知メール・反響一覧・スプレッドシート）はどの型でも同じです。
+            </p>
             <table class="widefat striped" style="max-width:900px">
                 <thead><tr><th style="width:170px">用途</th><th>ショートコード</th></tr></thead>
                 <tbody>
                 <tr><td><strong>標準</strong></td>
-                    <td><code>[eamber_form]</code><br><span class="description">全項目・枠なし。幅は「デザイン」タブの設定（未設定なら680px）で、中央に寄ります。</span></td></tr>
+                    <td><code class="fhs-copy-src">[eamber_form]</code><br><span class="description">
+                        <strong>工事内容をタイルで選ぶ2ステップ</strong>（STEP1 お困りの内容 → STEP2 ご連絡先・住所）。
+                        いちばん反響が取りやすい形で、何も書かなければこれになります。<br>
+                        幅は「デザイン」タブの設定（未設定なら680px）で、中央に寄ります。</span></td></tr>
+                <tr style="background:#eef6ff"><td><strong>シンプル</strong><br><span class="description">旧サイトと同じ形</span></td>
+                    <td><code class="fhs-copy-src">[eamber_form design="simple"]</code><br>
+                        <span class="description"><strong>工事内容を聞かず、1画面で終わる形。</strong>
+                        お名前・電話番号（必須）／メールアドレス（任意）／現場の住所（市町村は必須・番地は任意）／
+                        ご相談内容（必須）／同意 の並びです。<br>
+                        受け取った反響の工事内容は「その他の問い合わせ・相談」として記録されます。<br>
+                        <strong>この型は「項目の表示」タブの設定に左右されません。</strong>
+                        設定次第で項目が増減すると、シンプルを選んだ意味がなくなるためです。</span></td></tr>
+                <tr style="background:#eef6ff"><td><strong>選択式</strong><br><span class="description">選ぶと項目が変わる</span></td>
+                    <td><code class="fhs-copy-src">[eamber_form design="select"]</code><br>
+                        <span class="description"><strong>工事内容をドロップダウンで選び、選んだ内容に応じて次の項目が変わる形。</strong>
+                        1画面で、出るのは必須項目だけです。タイルを使わないぶん縦に短くなります。</span></td></tr>
                 <tr><td><strong>コンパクト</strong><br><span class="description">サイドバー等</span></td>
-                    <td><code>[eamber_form design="compact"]</code><br><span class="description">必須項目のみ・幅440pxのカード。</span></td></tr>
+                    <td><code class="fhs-copy-src">[eamber_form design="compact"]</code><br><span class="description">必須項目のみ・幅440pxのカード。</span></td></tr>
                 <tr><td><strong>カード</strong></td>
-                    <td><code>[eamber_form design="card"]</code><br><span class="description">全項目を枠＋影のカードで表示。</span></td></tr>
+                    <td><code class="fhs-copy-src">[eamber_form design="card"]</code><br><span class="description">標準と同じ中身を、枠＋影のカードに入れて表示。</span></td></tr>
                 <tr style="background:#fffbe6"><td><strong>ティザー（横長）</strong><br><span class="description">記事の途中・記事末</span></td>
                     <td><code>[eamber_form design="teaser"]</code><br>
                         <span class="description"><strong>入力欄が横一列に並ぶ</strong>横長タイプ。2〜3項目だけ入力してもらい、ボタンで<strong>お問い合わせページ</strong>へ。入力値は自動で引き継がれます。工事内容は<strong>タイルを1タップ</strong>で選べます。<br>

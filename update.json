@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.13.0",
+  "version": "1.13.1",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.13.0\n工事メニューに4種（エコキュート・電気温水器／太陽光発電／蓄電池・EV充電／防犯カメラ）を追加。フォームの型をショートコードで3つから選べるようにした（simple＝旧サイト同様／select＝ドロップダウンで選んで分岐／既定＝タイル2ステップ）。"
+    "changelog": "1.13.1\n設定画面の「ショートコード」タブに、フォームの3つの型（シンプル／選択式／標準）を載せた。readmeにしか書いておらず、使う画面から分からない状態だった。"
   }
 }

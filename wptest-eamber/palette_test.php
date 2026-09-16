@@ -44,7 +44,8 @@ $css = eaf_tile_palette_css();
 foreach (array_keys($GLOBALS['EAF_PTYPE_LABEL']) as $k) {
     if (!has($css, '.fhs-tile-' . $k . '{')) { t('カラフル: ' . $k . ' の色がある', false, true); }
 }
-t('カラフル: 9種すべてに色がある', substr_count($css, '--t-bg:'), 9);
+/* ★数字で固定しない。メニューを増やしたときに検査だけ取り残される */
+t('カラフル: 全メニューに色がある', substr_count($css, '--t-bg:'), count($GLOBALS['EAF_PTYPE_LABEL']));
 /* 色で見分ける配色なので、選択中は自分の色の枠（currentColor）に任せる */
 t('カラフル: 選択中の色は上書きしない', has($css, '--t-sel-bd'), false);
 

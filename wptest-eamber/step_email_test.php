@@ -55,6 +55,10 @@ $expected = array(
     'eaf_website',        // ハニーポット（人には見えない）
     'email',              // メール（任意・常に表示）
     'fan__fn_place',
+    'ecocute__ec_work',   // 2026-09-16 追加の4種
+    'solar__sl_work',
+    'battery__bt_work',
+    'camera__cm_work',
     'intercom__ic_symptom',
     'light__lt_work',
     'other__ot_note',
@@ -69,10 +73,14 @@ t('既定で出る入力欄は必須＋メール＋同意＋その他の会社�
 
 /* ================= 2c. 工事内容はタイルで選ばせる ================= */
 t('工事内容にセレクトを使っていない', strpos($html, '<select name="ptype"') !== false, false);
-t('タイルは9枚',                     substr_count($html, 'class="fhs-tile-input"'), 9);
+$menu_n = count($GLOBALS['EAF_PTYPE_LABEL']);
+t('自己診断: 工事メニューの数', $menu_n > 0, true);
+/* ★枚数は定義した数と連動させる。数字で固定すると、メニューを増やすたびに
+     検査だけが取り残される（2026-09-16に9→13へ増やしたときに実際そうなった）。 */
+t('タイルは定義した数だけ出る',       substr_count($html, 'class="fhs-tile-input"'), $menu_n);
 /* CSS側にも .fhs-tile-ico が3回出るので、マークアップの class 属性だけを数える */
-t('タイルにアイコンが入る',           substr_count($html, 'class="fhs-tile-ico"'), 9);
-t('タイルに代表例が添えてある',       substr_count($html, 'class="fhs-tile-n"'), 9);
+t('タイルにアイコンが入る',           substr_count($html, 'class="fhs-tile-ico"'), $menu_n);
+t('タイルに代表例が添えてある',       substr_count($html, 'class="fhs-tile-n"'), $menu_n);
 t('住宅配線のタイルがある',           strpos($html, 'value="wiring"') !== false, true);
 /* ★工事以外の用件（提携の営業・リピートのご連絡）も拾う枠。
      「まだ決まっていない」だと工事の話に見えるので中立の表記に変えた。 */
@@ -86,7 +94,7 @@ t('見出しがタイルの問いかけと重複しない', strpos($html, '>ど�
      グリッドの左上に置かれる（CSSグリッドの決まり）。ラベルを押すと
      ブラウザが対応するラジオへフォーカスを移し、その位置までスクロールするため、
      下の段のタイルほど画面が上に飛ぶ。スマホで実測して271px飛んでいた。 */
-t('タイルは1枚ずつ枠で包む',   substr_count($html, 'class="fhs-tile-cell"'), 9);
+t('タイルは1枚ずつ枠で包む',   substr_count($html, 'class="fhs-tile-cell"'), $menu_n);
 t('ラジオは枠の中にある',
   preg_match('/<div class="fhs-tile-cell">\s*<input type="radio"[^>]*class="fhs-tile-input"/', $html) === 1, true);
 t('枠は位置の基準になっている',

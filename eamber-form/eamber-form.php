@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.12.1
+ * Version: 1.13.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.12.1');
+define('EAF_VER', '1.13.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -108,6 +108,28 @@ function eaf_property_fields() {
             array('key'=>'fn_symptom', 'label'=>'症状',                'type'=>'select', 'def'=>'off', 'opts'=>'fn_symptom'),
             array('key'=>'fn_type',    'label'=>'種類',                'type'=>'select', 'def'=>'off', 'opts'=>'fn_type'),
         ),
+        /* ★2026-09-16 追加の4種。いずれも「壊れた」より「付けたい」が主なので、
+           症状ではなく、ご希望の内容を1問だけ聞く形にそろえてある。 */
+        'ecocute' => array(
+            array('key'=>'ec_work',    'label'=>'ご希望の内容',        'type'=>'select', 'def'=>'req', 'opts'=>'ec_work'),
+            array('key'=>'ec_now',     'label'=>'いまお使いの機器',    'type'=>'select', 'def'=>'off', 'opts'=>'ec_now'),
+            array('key'=>'ec_family',  'label'=>'ご家族の人数',        'type'=>'number', 'def'=>'off', 'ph'=>'例：4'),
+        ),
+        'solar' => array(
+            array('key'=>'sl_work',    'label'=>'ご希望の内容',        'type'=>'select', 'def'=>'req', 'opts'=>'sl_work'),
+            array('key'=>'sl_roof',    'label'=>'屋根の種類',          'type'=>'select', 'def'=>'off', 'opts'=>'sl_roof'),
+            array('key'=>'sl_year',    'label'=>'設置した年（西暦）',   'type'=>'number', 'def'=>'off', 'ph'=>'例：2015'),
+        ),
+        'battery' => array(
+            array('key'=>'bt_work',    'label'=>'ご希望の内容',        'type'=>'select', 'def'=>'req', 'opts'=>'bt_work'),
+            array('key'=>'bt_solar',   'label'=>'太陽光の設置',        'type'=>'select', 'def'=>'off', 'opts'=>'yesno_unknown'),
+            array('key'=>'bt_car',     'label'=>'お車の車種（分かれば）','type'=>'text',  'def'=>'off', 'ph'=>'例：日産サクラ'),
+        ),
+        'camera' => array(
+            array('key'=>'cm_work',    'label'=>'ご希望の内容',        'type'=>'select', 'def'=>'req', 'opts'=>'cm_work'),
+            array('key'=>'cm_count',   'label'=>'台数',                'type'=>'number', 'def'=>'off', 'ph'=>'例：2'),
+            array('key'=>'cm_place',   'label'=>'設置場所',            'type'=>'select', 'def'=>'off', 'opts'=>'cm_place'),
+        ),
         'wiring' => array(
             array('key'=>'wr_work',    'label'=>'ご希望の内容',        'type'=>'select', 'def'=>'req', 'opts'=>'wr_work'),
             array('key'=>'wr_year',    'label'=>'建物の築年（西暦）',   'type'=>'number', 'def'=>'off', 'ph'=>'例：1995'),
@@ -157,6 +179,45 @@ function eaf_prop_fields_for($pt, $flds) {
     if ($pt !== 'other') return $flds;
     if (eaf_mode('situation', 'detail', 'off') === 'off') return $flds;
     return array_values(array_filter($flds, function ($fd) { return $fd['key'] !== 'ot_note'; }));
+}
+
+/* =========================================================================
+ * シンプル版（design="simple"）の項目。
+ *
+ * ★旧サイトのフォーム（お名前・電話番号・メール・住所・ご相談内容）と同じ形。
+ *   工事内容の選択はせず、記録上は「その他の問い合わせ・相談」として扱う。
+ * ★グループ名をわざと simple_* にしてある。設定「項目の表示」に保存された
+ *   モードを拾わせないためで、こうしないと「シンプルを選んだのに設定次第で
+ *   項目が増減する」ことになり、3つの型を使い分ける意味がなくなる。
+ * ★描画と受け取りの両方でこの関数を使うこと。片方だけ使うと、画面に無い欄を
+ *   必須として弾く（送信できないフォームになる）。
+ * ======================================================================= */
+function eaf_simple_customer_fields() {
+    $out = array();
+    foreach (eaf_customer_fields() as $fd) {
+        if (!in_array($fd['key'], array('name', 'tel'), true)) continue;
+        $fd['def'] = 'req';
+        $out[] = $fd;
+    }
+    return $out;
+}
+
+/** シンプル版の「ご相談内容」。旧サイトでも必須だった項目 */
+function eaf_simple_situation_fields() {
+    $out = array();
+    foreach (eaf_situation_fields() as $fd) {
+        if ($fd['key'] !== 'detail') continue;
+        $fd['def'] = 'req';
+        $out[] = $fd;
+    }
+    return $out;
+}
+
+/** シンプル版の番地。旧サイトは住所そのものが任意だったので、番地は任意にする */
+function eaf_simple_address_fields() {
+    $out = array();
+    foreach (eaf_address_fields() as $fd) { $fd['def'] = 'opt'; $out[] = $fd; }
+    return $out;
 }
 
 /**
@@ -316,6 +377,21 @@ function eaf_opt_list($key) {
         case 'fn_place':  return array('台所','浴室','トイレ','洗面所','その他');
         case 'fn_symptom':return array('動かない','異音がする','風が弱い','古いので替えたい');
         case 'fn_type':   return array('プロペラ式','シロッコ（レンジフード）','天井埋込型','分からない');
+
+        /* ── エコキュート・電気温水器 ───────────────── */
+        case 'ec_work':   return array('交換したい','新しく設置したい','お湯が出ない・故障の相談','電気温水器からエコキュートへ替えたい','まず相談したい');
+        case 'ec_now':    return array('エコキュート','電気温水器','ガス給湯器','石油給湯器','分からない');
+
+        /* ── 太陽光発電 ─────────────────────────────── */
+        case 'sl_work':   return array('新しく設置したい','発電量が落ちた・点検してほしい','パワーコンディショナーを交換したい','蓄電池も一緒に検討したい','撤去・移設したい','まず相談したい');
+        case 'sl_roof':   return array('スレート（カラーベスト）','瓦','金属（ガルバリウム等）','陸屋根','分からない');
+
+        /* ── 蓄電池・EV充電 ─────────────────────────── */
+        case 'bt_work':   return array('蓄電池を設置したい','EV充電用のコンセントを付けたい','V2H（車から家へ給電）を設置したい','太陽光と一緒に検討したい','まず相談したい');
+
+        /* ── 防犯カメラ ─────────────────────────────── */
+        case 'cm_work':   return array('新しく取り付けたい','台数を増やしたい','古いものを交換したい','映らない・故障の相談','まず相談したい');
+        case 'cm_place':  return array('玄関まわり','駐車場','店舗・事務所の中','敷地の外周','その他');
 
         /* ── 住宅配線・電気工事全般 ─────────────────── */
         case 'wr_work':   return array('配線の交換・更新','リフォーム・増築に合わせた工事','新築の電気工事','電気の調子が悪い（原因を見てほしい）','まず相談したい');
@@ -758,6 +834,12 @@ $GLOBALS['EAF_PTYPE_LABEL'] = array(
     'outlet'   => 'コンセント・スイッチ',
     'light'    => '照明・LED化',
     'fan'      => '換気扇',
+    /* ★2026-09-16 吉村さん指示で4種追加。「困って直す」工事のあとに
+       「付けたい」設備をまとめて置き、全般・法人・その他で締める並びにしてある。 */
+    'ecocute'  => 'エコキュート・電気温水器',
+    'solar'    => '太陽光発電',
+    'battery'  => '蓄電池・EV充電',
+    'camera'   => '防犯カメラ',
     /* ★住宅配線は料金表にある正式メニューなのに、初版では選択肢から漏れていた。
        記事台帳286本のうち22本がこの領域で、「◯◯市 電気工事」の主要な受け皿でもある。 */
     'wiring'   => '住宅の配線・電気工事全般',
@@ -776,6 +858,10 @@ $GLOBALS['EAF_PTYPE_SHORT'] = array(
     'outlet'   => 'コンセント・スイッチ',
     'light'    => '照明・LED',
     'fan'      => '換気扇',
+    'ecocute'  => 'エコキュート',
+    'solar'    => '太陽光',
+    'battery'  => '蓄電池・EV充電',
+    'camera'   => '防犯カメラ',
     'wiring'   => '住宅の配線・全般',
     'business' => '店舗・事務所・工場',
     'other'    => 'その他',
@@ -810,6 +896,10 @@ function eaf_tile_palettes() {
                 'outlet'   => array('#FCEDF1', '#A6486A'),
                 'light'    => array('#F3EFFC', '#6A56A8'),
                 'fan'      => array('#EAF6F6', '#2F7E7E'),
+                'ecocute'  => array('#FFF0EE', '#A9504A'),
+                'solar'    => array('#FFF7E0', '#96770F'),
+                'battery'  => array('#E9F5EC', '#2E7D52'),
+                'camera'   => array('#EDF1F6', '#41597A'),
                 'wiring'   => array('#FDF1E6', '#A85F2B'),
                 'business' => array('#EFF1F6', '#4C5878'),
                 'other'    => array('#F5F3EF', '#6B6155'),
@@ -855,6 +945,14 @@ function eaf_ptype_icon($k) {
         'outlet'   => '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><circle cx="9.5" cy="12" r="1.3"/><circle cx="14.5" cy="12" r="1.3"/>',
         'light'    => '<path d="M12 2.8a6 6 0 0 0-3.4 11c.6.5.9 1.1.9 1.8v.4h5v-.4c0-.7.3-1.3.9-1.8A6 6 0 0 0 12 2.8Z"/><path d="M9.8 19.4h4.4M10.6 21.4h2.8"/>',
         'fan'      => '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/><path d="M12 10V3.2M14 12h6.8M12 14v6.8M10 12H3.2"/>',
+        /* 貯湯タンクと湯気 */
+        'ecocute'  => '<rect x="6.6" y="7" width="10.8" height="14.2" rx="3.2"/><path d="M9.6 3.2c0 1.3 1.1 1.3 1.1 2.6M13.3 3.2c0 1.3 1.1 1.3 1.1 2.6"/><path d="M9.4 11.6h5.2"/>',
+        /* 屋根に載せたパネルと太陽 */
+        'solar'    => '<path d="M2.8 16.2h14.4l-2.1-7.4H4.9z"/><path d="M8.2 8.8 6.9 16.2M12.6 8.8l1.3 7.4M4 12.5h12"/><circle cx="19.4" cy="5.2" r="2"/>',
+        /* 電池と稲妻 */
+        'battery'  => '<rect x="2.6" y="7.2" width="15" height="9.6" rx="2.4"/><path d="M20.4 10.8v2.4"/><path d="M10.4 9.4 8.2 12.6h3.1l-2.2 3.2"/>',
+        /* 箱型カメラとレンズ */
+        'camera'   => '<path d="M2.6 8.9 16.3 5.2l1.3 4.9L3.9 13.8z"/><circle cx="19.9" cy="8.6" r="1.7"/><path d="M7.2 14.1v1.9a2.2 2.2 0 0 0 2.2 2.2h1.3"/><path d="M8.6 20.6h3.8"/>',
         'wiring'   => '<circle cx="4.5" cy="4.5" r="1.9"/><path d="M4.5 6.4v5.1a4 4 0 0 0 4 4h7a4 4 0 0 1 4 4v1"/><path d="M9 11h6"/>',
         'business' => '<path d="M3 21h18M5.5 21V6.5L12 3.5l6.5 3V21"/><path d="M9.5 10h1.2M13.3 10h1.2M9.5 14h1.2M13.3 14h1.2"/>',
         'other'    => '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.2 2.6c-.5.2-.8.7-.8 1.2v.4"/><path d="M12 17.1h.01"/>',
@@ -874,6 +972,10 @@ $GLOBALS['EAF_PTYPE_NOTE'] = array(
     'outlet'   => '増設・交換・焦げくさい',
     'light'    => '交換・LED化・つかない',
     'fan'      => '動かない・異音・交換',
+    'ecocute'  => '交換・故障・新しく設置',
+    'solar'    => '設置・点検・パワコン交換',
+    'battery'  => '設置・V2H・EV充電',
+    'camera'   => '設置・増設・交換',
     'wiring'   => '配線の交換・リフォーム・新築',
     'business' => 'キュービクル・LED化・LAN',
     'other'    => 'その他の問い合わせ・相談',
@@ -2220,6 +2322,9 @@ function eaf_ajax() {
 
     $lim     = eaf_rl_limits();
     $compact = !empty($_POST['compact']);
+    /* ★シンプル版（design="simple"）。描画側と同じ判断をここでもする。
+       片方だけ simple 扱いにすると、画面に無い欄を必須として弾く。 */
+    $simple  = !empty($_POST['simple']);
 
     $ptype   = sanitize_text_field($_POST['ptype'] ?? '');
     // 市町村は必須のセレクト。選択肢外の値はフォーム改ざんとみなして弾く
@@ -2286,18 +2391,26 @@ function eaf_ajax() {
         return array($vals, $lines);
     };
 
-    list($cust, $cust_lines) = $collect('customer',  eaf_customer_fields(),  'customer_');
-    list($situ, $situ_lines) = $collect('situation', eaf_situation_fields(), 'situation_');
+    list($cust, $cust_lines) = $simple
+        ? $collect('simple_customer',  eaf_simple_customer_fields(),  'customer_')
+        : $collect('customer',  eaf_customer_fields(),  'customer_');
+    list($situ, $situ_lines) = $simple
+        ? $collect('simple_situation', eaf_simple_situation_fields(), 'situation_')
+        : $collect('situation', eaf_situation_fields(), 'situation_');
     /* 市町村より下（丁目・番地・建物名）。設定で任意・非表示にもできる。
        ★$collect はこの行より上では未定義なので、住所の検証と同じ場所には置けない。 */
-    list($addr_vals, $addr_lines) = $collect('address', eaf_address_fields(), '');
+    list($addr_vals, $addr_lines) = $simple
+        ? $collect('simple_address', eaf_simple_address_fields(), '')
+        : $collect('address', eaf_address_fields(), '');
     $address_detail = isset($addr_vals['address_detail']) ? $addr_vals['address_detail']['val'] : '';
     $address_full = trim($address . ' ' . $address_detail);
 
     // 工事内容ごとの項目
     $prop_lines = array(); $prop_vals = array();
     $schema = eaf_property_fields();
-    if (isset($schema[$ptype])) {
+    /* ★シンプル版は工事内容を聞かないので、枝の質問も課さない。
+       ここを外し忘れると「画面に無い項目を入力してください」で送信できなくなる。 */
+    if (!$simple && isset($schema[$ptype])) {
         list($prop_vals, $prop_lines) = $collect('prop_' . $ptype, eaf_prop_fields_for($ptype, $schema[$ptype]), $ptype . '__');
     }
 
@@ -2585,6 +2698,10 @@ function eaf_form_css() {
     .fhs-design-compact .fhs-form .fhs-hint{display:none}
     .fhs-design-compact .fhs-group{grid-template-columns:1fr} /* 幅が狭いので1カラム */
     .fhs-design-compact .fhs-section{display:none}
+    /* ★シンプル版は見出しを出さない。7項目しかない1枚の紙に「ご連絡先」と
+       区切りを入れても、何と何を分けているのか伝わらない（旧サイトにも無かった）。
+       選択式のほうは工事内容と連絡先で話が変わるので、見出しを残す。 */
+    .fhs-design-simple .fhs-section{display:none}
     .fhs-design-compact .fhs-check label{font-size:14px}
     .fhs-design-compact .fhs-lead{font-size:14px;padding:10px 12px}
     .fhs-design-compact .fhs-spec{font-size:15px}
@@ -2806,7 +2923,11 @@ function eaf_form_js() {
   /* 工事内容はタイル（ラジオ）で選ばせる。他の入力欄と同じようには扱えないので、
      値の読み取りをここに閉じ込める。ティザー側も同じラジオなので両方これで読める。 */
   var ptypeBox = wrap.querySelector('.fhs-ptype-field');
+  /* ★工事内容はタイル（ラジオ）でもドロップダウンでも選べる。
+       読み取りをここに閉じ込めて、どちらでも同じように分岐させる。 */
   function ptypeValue(){
+    var sel = form.querySelector('select[name="ptype"]');
+    if (sel) return sel.value;
     var r = form.querySelector('input[name="ptype"]:checked');
     return r ? r.value : '';
   }
@@ -2975,7 +3096,7 @@ function eaf_form_js() {
     var agree = box.querySelector('input[name="agree"]');
     if (agree && !agree.checked) out.push(agree);
     /* 工事内容はラジオ。画面の先頭にあるので、未選択なら真っ先に知らせる */
-    var ptIn = box.querySelector('input[name="ptype"]');
+    var ptIn = box.querySelector('select[name="ptype"], input[name="ptype"]');
     if (ptIn && ptypeValue() === '') out.unshift(ptIn);
     return out;
   }
@@ -3048,7 +3169,7 @@ function eaf_form_js() {
     }, 120);
   }
 
-  Array.prototype.forEach.call(form.querySelectorAll('input[name="ptype"]'), function(r){
+  Array.prototype.forEach.call(form.querySelectorAll('input[name="ptype"], select[name="ptype"]'), function(r){
     r.addEventListener('change', switchType);
   });
   /* ★二段目のカード（法人の工事内容）。選ばれた値を隠し入力へ写す。
@@ -3651,8 +3772,15 @@ function eaf_shortcode($atts = array()) {
            進んだのか戻ったのか分からなくなる。出したい場合だけ steps="1"。 */
         'logo' => '', 'badge' => '', 'steps' => '0', 'width' => '', 'tags' => '',
     ), $atts, 'eamber_form');
-    $design  = in_array($a['design'], array('default', 'compact', 'card', 'teaser', 'teaser-v'), true) ? $a['design'] : 'default';
+    $design  = in_array($a['design'], array('default', 'simple', 'select', 'compact', 'card', 'teaser', 'teaser-v'), true) ? $a['design'] : 'default';
     $compact = ($design === 'compact');
+    /* ★3つの型。simple＝選択なし／select＝ドロップダウンで選んで分岐／既定＝タイル。
+       どれも1画面にする（compact と同じ扱い）。ステップは9枚のタイルを
+       見せるために設けたもので、項目を絞った型では区切る意味がない。 */
+    $simple  = ($design === 'simple');
+    $selectui = ($design === 'select');
+    /* 必須項目だけ出す型。幅を440pxに縮めるのは compact だけなので、そこは分ける */
+    $lean    = $compact || $simple || $selectui;
     $teaser  = ($design === 'teaser' || $design === 'teaser-v');   // 入口フォーム（本フォームへ引き継ぐ）
     $btn     = $a['button'] !== '' ? sanitize_text_field($a['button'])
                                    : ($teaser ? '無料で相談する' : 'この内容で送信する');
@@ -3712,13 +3840,17 @@ function eaf_shortcode($atts = array()) {
     $uid     = 'fhs-' . uniqid() . '-' . (++$seq);
 
     // compact では必須項目だけに絞る（メインビジュアル横などに収めるため）
-    $cust_fields = eaf_visible_fields('customer',  eaf_customer_fields(),  $compact);
-    $situ_fields = eaf_visible_fields('situation', eaf_situation_fields(), $compact);
+    $cust_fields = $simple
+        ? eaf_visible_fields('simple_customer',  eaf_simple_customer_fields(),  false)
+        : eaf_visible_fields('customer',  eaf_customer_fields(),  $lean);
+    $situ_fields = $simple
+        ? eaf_visible_fields('simple_situation', eaf_simple_situation_fields(), false)
+        : eaf_visible_fields('situation', eaf_situation_fields(), $lean);
 
     /* ステップは2つだけ:「お困りの内容（概要）→ ご連絡先（個人情報）」。
        画面を増やすほど離脱するため、聞くことは1画面目にまとめ、個人情報は必ず最後に置く。
        compact とティザーは元々短いので分けない。 */
-    $stepped     = !$teaser && !$compact && eaf_flag('step_form', true);
+    $stepped     = !$teaser && !$lean && eaf_flag('step_form', true);
     $step_titles = array('お困りの内容', 'ご連絡先');
 
     /* 第三者提供の設定は持たない（運営＝施工＝同じ会社の自社サイトに置くフォームのため）。
@@ -3981,17 +4113,35 @@ function eaf_shortcode($atts = array()) {
 <?php endif; ?>
 
 <?php if ($stepped): ?><div class="fhs-formstep" data-step="1"><?php endif; ?>
+<?php if ($simple): /* ===== シンプル版：工事内容を聞かない ===== */ ?>
+      <?php /* ★記録上は「その他の問い合わせ・相談」として残す。こうしておくと
+               反響一覧・通知メール・スプレッドシートの形が3つの型で揃う。
+               simple=1 は受け取り側にも同じ判断をさせるための印。 */ ?>
+      <input type="hidden" name="ptype" value="other">
+      <input type="hidden" name="simple" value="1">
+<?php else: ?>
       <?php /* 見出しは置かない。問いかけそのものが見出しとして働くので、
                「お困りの内容」と重ねると同じことを2回言うことになる。 */ ?>
       <div class="fhs-ptype-field">
         <span class="fhs-tile-q" id="<?php echo esc_attr($uid . '-ptq'); ?>">どんなことでお困りですか？<span class="fhs-req">必須</span></span>
+<?php if ($selectui): ?>
+        <?php /* ★選択式。タイルと同じ並び・同じ言い方にする（正式名で出す）。
+                 選んだあとの分岐はタイルのときと同じ仕組みが動く。 */ ?>
+        <select name="ptype" id="<?php echo esc_attr($uid . '-ptype'); ?>" class="fhs-typed" required>
+          <option value="">選択してください</option>
+<?php   foreach ($GLOBALS['EAF_PTYPE_LABEL'] as $pk => $pv): ?>
+          <option value="<?php echo esc_attr($pk); ?>"><?php echo esc_html($pv); ?></option>
+<?php   endforeach; ?>
+        </select>
+<?php else: ?>
         <?php echo $render_ptype_tiles($uid, 'ptype', true, $uid . '-ptq'); ?>
+<?php endif; ?>
       </div>
 
       <?php /* ★工事内容ごとの質問はタイルのすぐ下に置く。
                押したタイルへの返事なので、市町村を挟むと話が飛んで見える。 */ ?>
 <?php foreach (eaf_property_fields() as $pt => $flds):
-        $vis = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, eaf_prop_fields_for($pt, $flds), $compact), 1);
+        $vis = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, eaf_prop_fields_for($pt, $flds), $lean), 1);
         if (!$vis) continue; ?>
       <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
 <?php   foreach ($vis as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
@@ -4006,6 +4156,7 @@ function eaf_shortcode($atts = array()) {
 <?php   foreach ($situ_fields as $fd) { echo $render_field($fd, 'situation_', $uid); } ?>
       </div>
 <?php endif; ?>
+<?php endif; /* ===== シンプル版の分岐ここまで ===== */ ?>
 
 <?php if ($stepped): ?></div><?php endif; /* step 1 ここまで */ ?>
 
@@ -4014,13 +4165,13 @@ function eaf_shortcode($atts = array()) {
 <?php /* ★会社名は工事内容ごとの項目だが、出すのはこの2枚目。
          法人名 → 担当者名 → 電話 → 住所 の順で、宛名として自然に読める。
          1枚目と同じ .fhs-group[data-ptype] なので、表示の切り替えは共通の仕組みが面倒を見る。 */ ?>
-<?php foreach (eaf_property_fields() as $pt => $flds):
-        $vis2 = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, eaf_prop_fields_for($pt, $flds), $compact), 2);
+<?php if (!$simple): foreach (eaf_property_fields() as $pt => $flds):
+        $vis2 = eaf_fields_on_step(eaf_visible_fields('prop_' . $pt, eaf_prop_fields_for($pt, $flds), $lean), 2);
         if (!$vis2) continue; ?>
       <div class="fhs-group" data-ptype="<?php echo esc_attr($pt); ?>" style="display:none">
 <?php   foreach ($vis2 as $fd) { echo $render_field($fd, $pt . '__', $uid); } ?>
       </div>
-<?php endforeach; ?>
+<?php endforeach; endif; ?>
 <?php if ($cust_fields): ?>
       <div class="fhs-group">
 <?php   foreach ($cust_fields as $fd) { echo $render_field($fd, 'customer_', $uid); } ?>
@@ -4033,7 +4184,9 @@ function eaf_shortcode($atts = array()) {
          2つのラベルに割ると、同じ住所を二度聞かれているように見える。
          データとしては分けたまま（市町村はセレクト＝表記ゆれが出ないので、
          対応エリアの判定・市町村ごとの集計・通知メールの件名に使える）。 */
-      $addr_vis = eaf_visible_fields('address', eaf_address_fields(), $compact);
+      $addr_vis = $simple
+          ? eaf_visible_fields('simple_address', eaf_simple_address_fields(), false)
+          : eaf_visible_fields('address', eaf_address_fields(), $lean);
       $addr_fd  = $addr_vis ? $addr_vis[0] : null;
       $addr_id  = $uid . '-address_detail';
       $addr_ph  = $addr_fd ? (isset($addr_fd['ph']) ? $addr_fd['ph'] : '') : '';
@@ -4064,12 +4217,18 @@ function eaf_shortcode($atts = array()) {
       <input type="email" name="email" id="<?php echo esc_attr($uid . '-email'); ?>" placeholder="you@example.com" autocomplete="email">
       <div class="fhs-hint">ご入力いただくと、受付内容の控えをメールでお送りします</div>
 
+<?php if ($simple && $situ_fields): /* ★シンプル版はここが本題。同意の直前に置く */ ?>
+      <div class="fhs-group">
+<?php   foreach ($situ_fields as $fd) { echo $render_field($fd, 'situation_', $uid); } ?>
+      </div>
+<?php endif; ?>
+
 
       <div class="fhs-check">
         <input type="checkbox" name="agree" id="<?php echo esc_attr($uid . '-agree'); ?>" value="1" required>
         <label for="<?php echo esc_attr($uid . '-agree'); ?>"><?php echo $agree_label; ?></label>
       </div>
-<?php if ($compact): ?>
+<?php if ($lean): ?>
       <input type="hidden" name="compact" value="1">
 <?php endif; ?>
 <?php if ($stepped): ?></div><?php endif; /* 最終ステップ ここまで */ ?>

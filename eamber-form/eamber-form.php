@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.13.2
+ * Version: 1.13.3
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.13.2');
+define('EAF_VER', '1.13.3');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -2230,11 +2230,22 @@ function eaf_leads_page() {
     if ($dberr) echo '<div class="notice notice-error"><p><strong>直近に保存エラーが発生しました：</strong> ' . esc_html($dberr) . '<br>最新版に更新すると自動修復を試みます。解消されない場合は、この赤いメッセージの文面を共有してください。</p></div>';
     echo '<p>反響件数：' . $total . ' 件（表示は最新200件）　<a class="button button-primary" href="' . esc_url($export) . '">CSVエクスポート（Excel）</a></p>';
     echo '<p class="description">個人情報を含みます。CSVの取り扱いにご注意ください。</p>';
+
+    /* ★列の数はここ1か所で決める。見出しの数と、
+         「まだありません」のcolspan、下に開く本文のcolspanがずれると表が崩れる。 */
+    $heads = array('受付日時', 'お名前', '電話', 'メール', '工事内容', '現場の住所', '建物', '時期', '詳細', '操作');
+    $ncol  = count($heads);
     echo '<table class="widefat striped"><thead><tr>';
-    echo '<th>受付日時</th><th>お名前</th><th>電話</th><th>メール</th><th>工事内容</th><th>現場の住所</th><th>建物</th><th>時期</th><th>詳細</th><th>操作</th></tr></thead><tbody>';
+    foreach ($heads as $h) echo '<th style="white-space:nowrap">' . esc_html($h) . '</th>';
+    echo '</tr></thead><tbody>';
+
     if ($rows) foreach ($rows as $r) {
         $plabel = isset($GLOBALS['EAF_PTYPE_LABEL'][$r->ptype]) ? $GLOBALS['EAF_PTYPE_LABEL'][$r->ptype] : $r->ptype;
-        $det = isset($r->details) ? (string)$r->details : '';
+        /* ★お客様が自由に書いた「ご相談内容」は detail に入る。
+             details には専用の保存先を持たない項目だけが入るため、
+             details だけを見ていると、いちばん読みたい文章が一覧に出てこない。 */
+        $det  = isset($r->details) ? (string) $r->details : '';
+        $free = isset($r->detail)  ? (string) $r->detail  : '';
         $del = wp_nonce_url(admin_url('admin-post.php?action=eaf_delete_lead&id=' . $r->id), 'eaf_delete_lead_' . $r->id);
         $g = function ($v) { return ($v !== null && $v !== '') ? $v : '-'; };
         /* ★会社名は列を増やさず、お名前の上に小さく出す。
@@ -2248,9 +2259,23 @@ function eaf_leads_page() {
         $ad = isset($r->address_detail) ? (string) $r->address_detail : '';
         if ($ad !== '') $addrcell .= '<span style="display:block;font-size:12px;color:#555">'
                                    . esc_html($ad) . '</span>';
-        printf('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
-             . '<td style="white-space:pre-line;font-size:12px;line-height:1.5">%s</td>'
-             . '<td><a href="%s" onclick="return confirm(\'この反響を削除しますか？\')" style="color:#b32d2e">削除</a></td></tr>',
+
+        /* 下に開く中身。ご相談内容を先頭に、その下に選択式の回答を続ける */
+        $detcell = '';
+        if ($free !== '') {
+            $detcell .= '<span style="display:block;font-weight:600;font-size:12px;color:#646970;margin-bottom:3px">ご相談内容</span>'
+                      . '<span style="display:block;margin-bottom:10px">' . esc_html($free) . '</span>';
+        }
+        if ($det !== '') $detcell .= '<span style="display:block;font-size:12px;color:#50575e">' . esc_html($det) . '</span>';
+
+        /* ★一覧に長文を並べると、営業メールが1通入っただけで画面が流れて使えなくなる。
+             一覧では「詳細あり／なし」だけが分かればよく、中身は押したときに出す。 */
+        $btn = ($detcell !== '')
+            ? '<button type="button" class="button button-small eaf-det-btn" aria-expanded="false" style="white-space:nowrap">見る</button>'
+            : '<span style="color:#8c8f94">-</span>';
+
+        printf('<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+             . '<td style="white-space:nowrap"><a href="%s" onclick="return confirm(\'この反響を削除しますか？\')" style="color:#b32d2e">削除</a></td></tr>',
             esc_html($r->created_at),
             $namecell,   /* 中で esc_html 済み */
             esc_html($g(isset($r->tel) ? $r->tel : '')),
@@ -2259,10 +2284,35 @@ function eaf_leads_page() {
             $addrcell,   /* 中で esc_html 済み */
             esc_html($g(isset($r->building) ? $r->building : '')),
             esc_html($g(isset($r->timing) ? $r->timing : '')),
-            esc_html($det !== '' ? $det : '-'),
+            $btn,        /* 中で esc_html 済み */
             esc_url($del));
-    } else echo '<tr><td colspan="10">まだありません</td></tr>';
-    echo '</tbody></table></div>';
+
+        if ($detcell !== '') {
+            printf('<tr class="eaf-det-row" style="display:none"><td colspan="%d" '
+                 . 'style="white-space:pre-line;font-size:13px;line-height:1.8;background:#f6f7f7;'
+                 . 'border-top:0;border-left:3px solid #2271b1;padding:10px 14px 14px 14px;color:#1d2327">%s</td></tr>',
+                $ncol, $detcell);
+        }
+    } else echo '<tr><td colspan="' . $ncol . '">まだありません</td></tr>';
+    echo '</tbody></table>';
+    ?>
+    <script>
+    /* 「見る」を押した行のすぐ下（隠してある行）を開け閉てする。
+       行が増えても効くよう、表全体で1回だけ受ける。 */
+    document.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('.eaf-det-btn') : null;
+        if (!b) return;
+        var row = b.closest('tr');
+        var box = row && row.nextElementSibling;
+        if (!box || box.className.indexOf('eaf-det-row') < 0) return;
+        var hidden = (box.style.display === 'none');
+        box.style.display = hidden ? '' : 'none';
+        b.textContent = hidden ? '閉じる' : '見る';
+        b.setAttribute('aria-expanded', hidden ? 'true' : 'false');
+    });
+    </script>
+    <?php
+    echo '</div>';
 }
 
 /* CSVエクスポート（Excel向けShift_JIS） */

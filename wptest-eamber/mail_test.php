@@ -122,6 +122,47 @@ $e2 = get_option('eaf_last_mail_error');
 t('WP_Error以外は無視する', is_array($e2) ? $e2['msg'] : '', 'Could not instantiate mail function.');
 $GLOBALS['FAKE_IS_ADMIN'] = false;
 
+/* --- 担当者通知：1人に1通ずつ送る・届き先を本文に書く --- */
+/* ★宛先を並べて1通で送ると同報メールに見え、迷惑メール寄りに判定される。
+     その代わり宛先欄には自分しか出ないので、誰に届いているかを本文に書く。 */
+$o = get_option(EAF_OPT, array());
+$o['notify_email'] = 'a@example.test, b@example.test, c@example.test';
+update_option(EAF_OPT, $o);
+
+$body3 = eaf_admin_notify_body(array('email' => '', 'property_details' => ''));
+t('届き先の見出しが本文に出る', strpos($body3, 'この反響の届き先') !== false, true);
+t('1人目が書いてある', strpos($body3, '・a@example.test') !== false, true);
+t('2人目が書いてある', strpos($body3, '・b@example.test') !== false, true);
+t('3人目が書いてある', strpos($body3, '・c@example.test') !== false, true);
+t('別々に送っていると断っている',
+  strpos($body3, 'お一人ずつに別々に送っています') !== false, true);
+
+/* ★届き先が1人だけなら、この節は書かない（読む行が増えるだけ） */
+$o['notify_email'] = 'only@example.test';
+update_option(EAF_OPT, $o);
+$body1 = eaf_admin_notify_body(array('email' => '', 'property_details' => ''));
+t('届き先が1人なら書かない', strpos($body1, 'この反響の届き先') !== false, false);
+t('管理画面の案内は残る', strpos($body1, '反響一覧') !== false, true);
+
+/* ★実際の送り方：宛先の数だけ wp_mail が呼ばれ、それぞれ宛先は1件 */
+$o['notify_email'] = 'a@example.test, b@example.test, c@example.test';
+update_option(EAF_OPT, $o);
+fake_state();
+$GLOBALS['FAKE_STATE']['mails'] = array();
+fake_save();
+$notify = eaf_notify_list();
+$subj = '【お問い合わせ】検査';
+$bd   = eaf_admin_notify_body(array('email' => '', 'property_details' => ''));
+foreach ($notify as $to) wp_mail($to, $subj, $bd, array());
+fake_state();
+$sent = $GLOBALS['FAKE_STATE']['mails'];
+t('宛先の数だけ送られる', count($sent), 3);
+$one = true;
+foreach ($sent as $m) { if (is_array($m['to']) || strpos((string)$m['to'], ',') !== false) $one = false; }
+t('1通ごとの宛先は1件だけ', $one, true);
+t('1通目の宛先', $sent[0]['to'], 'a@example.test');
+t('3通目の宛先', $sent[2]['to'], 'c@example.test');
+
 /* 自己診断 */
 t('自己診断: 失敗時の本文が空ではない', strlen($html) > 100, true);
 t('自己診断: 設定画面を描けている', strpos($page, '送信元メール') !== false, true);

@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.13.3",
+  "version": "1.13.4",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.13.3\n反響一覧でご相談内容が読めない不具合を修正（「見る」を押すと開きます）"
+    "changelog": "1.13.4\n通知メールの本文に「この反響の届き先」を載せた"
   }
 }

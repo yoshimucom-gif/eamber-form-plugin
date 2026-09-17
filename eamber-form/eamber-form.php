@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.13.3
+ * Version: 1.13.4
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.13.3');
+define('EAF_VER', '1.13.4');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1259,6 +1259,16 @@ function eaf_admin_notify_body($ctx) {
     $b .= (isset($ctx['property_details']) ? $ctx['property_details'] : '') . "\n";
     /* ★チェック欄を出していないなら、この節は書かない。
        求めてもいない同意の可否を毎回伝えても、担当者には読む行が増えるだけ。 */
+    /* ★反響は1人に1通ずつ送っている（宛先を並べると同報メールに見えて
+         迷惑メール寄りに判定される）。そのため、受け取ったメールの宛先欄には
+         自分のアドレスしか出ない。誰に届いているかが分からないと、
+         自分だけが見ているのかを判断できないので、本文に書き添える。 */
+    $to_list = eaf_notify_list();
+    if (count($to_list) > 1) {
+        $b .= "\n───── この反響の届き先 ─────\n";
+        foreach ($to_list as $to) $b .= "・" . $to . "\n";
+        $b .= "（同じ内容を、上のお一人ずつに別々に送っています）\n";
+    }
     $b .= "\n管理画面「電気工事反響フォーム → 反響一覧」からも確認できます。";
     return $b;
 }

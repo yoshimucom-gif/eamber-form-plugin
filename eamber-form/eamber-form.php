@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.13.1
+ * Version: 1.13.2
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.13.1');
+define('EAF_VER', '1.13.2');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -2547,16 +2547,23 @@ function eaf_ajax() {
     if ($from) $headers[] = 'From: ' . $site . ' <' . $from . '>';
     $mail_ok = ($email !== '') ? wp_mail($email, eaf_mail_subject(), eaf_mail_body($ctx), $headers) : false;
 
-    // 担当者通知（複数宛に送れる）
+    // 担当者通知
     if (eaf_flag('notify_on', true)) {
         $notify = eaf_notify_list();
         if ($notify) {
             $subj = '【お問い合わせ】' . $label . ' / ' . $address . ($ctx['name'] !== '' ? ' / ' . $ctx['name'] . '様' : '');
-            if (wp_mail($notify, $subj, eaf_admin_notify_body($ctx), $headers)) {
-                delete_option('eaf_notify_failed');
-            } else {
-                eaf_notify_failed(implode(', ', $notify));
+            $body = eaf_admin_notify_body($ctx);
+            /* ★1人に1通ずつ送る。宛先を並べて1通で送ると、
+                 ・同報メールとして迷惑メール寄りに判定される
+                 ・受け取った担当者どうしにアドレスが見える
+                 ・1人ぶんの宛先が弾かれると、全員ぶんが失敗になる
+               の3つが同時に起きる。 */
+            $ng = array();
+            foreach ($notify as $to) {
+                if (!wp_mail($to, $subj, $body, $headers)) $ng[] = $to;
             }
+            if ($ng) eaf_notify_failed(implode(', ', $ng));
+            else     delete_option('eaf_notify_failed');
         }
     }
 

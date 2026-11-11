@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.14.0
+ * Version: 1.14.1
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.14.0');
+define('EAF_VER', '1.14.1');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -3958,12 +3958,29 @@ function eaf_sheet_send($payload) {
          2行ずつ並んでいた。送り直すなら、人が押したときだけにする。 */
     $res = wp_remote_post($url, array(
         'timeout'     => 15,
-        'redirection' => 5,            // GASのウェブアプリは別ドメインへ転送される
+        'redirection' => 0,            // ★転送は自分で追う（下の理由）
         'headers'     => array('Content-Type' => 'text/plain;charset=utf-8'),
         'body'        => $json,
     ));
     if (is_wp_error($res)) return $res->get_error_message();
     $code = (int) wp_remote_retrieve_response_code($res);
+
+    /* ★GASのウェブアプリは、処理を終えたあと別ドメイン
+         （script.googleusercontent.com）へ転送して、そこで返事を渡す。
+         転送の追従を任せると POST のまま追いかけてしまい、転送先は
+         POST を受け付けないので 400 を返す。
+         その結果「シートには行が入っているのに、転記できませんでしたと
+         記録される」状態になる。転送は自分で、GET で追う。 */
+    $hops = 0;
+    while (in_array($code, array(301, 302, 303, 307, 308), true) && $hops < 5) {
+        $loc = wp_remote_retrieve_header($res, 'location');
+        if (!$loc) break;
+        $res = wp_remote_get($loc, array('timeout' => 15, 'redirection' => 0));
+        if (is_wp_error($res)) return $res->get_error_message();
+        $code = (int) wp_remote_retrieve_response_code($res);
+        $hops++;
+    }
+
     $body = (string) wp_remote_retrieve_body($res);
     if ($code !== 200) {
         return 'HTTP ' . $code . '／' . eaf_trim_len(eaf_sheet_clean_error($body), 160);

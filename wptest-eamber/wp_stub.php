@@ -504,8 +504,20 @@ function wp_send_json($data) {
     echo wp_json_encode($data);
     exit;
 }
+if (!function_exists('wp_remote_retrieve_header')) {
+function wp_remote_retrieve_header($r, $name) {
+    if (!is_array($r) || empty($r['headers'])) return '';
+    foreach ($r['headers'] as $k => $v) if (strtolower($k) === strtolower($name)) return $v;
+    return '';
+}
+}
 if (!function_exists('wp_remote_get')) {
-function wp_remote_get($url, $args = array()) { return new WP_Error('no-net', 'disabled in test'); }
+/* ★検査から FAKE_HTTP を入れれば、転送を追う動きをその場で見られる。 */
+function wp_remote_get($url, $args = array()) {
+    $GLOBALS['FAKE_HTTP_LOG'][] = array('method' => 'GET', 'url' => $url);
+    if (isset($GLOBALS['FAKE_HTTP'][$url])) return $GLOBALS['FAKE_HTTP'][$url];
+    return new WP_Error('no-net', 'disabled in test');
+}
 }
 /* ---------------- 外部への送信（実際には出さず、内容を控える） ---------------- */
 if (!function_exists('wp_remote_post')) {

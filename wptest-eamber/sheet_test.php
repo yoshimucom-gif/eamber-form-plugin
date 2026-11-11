@@ -53,7 +53,9 @@ t('まず text/plain で試す', strpos($sent[0]['args']['headers']['Content-Typ
 t('中身はJSON', json_decode($sent[0]['args']['body'], true) !== null, true);
 $body = json_decode($sent[0]['args']['body'], true);
 t('本文に工事内容が入る', $body['ptype'], '住宅の配線・電気工事全般');
-t('転送を追う設定', $sent[0]['args']['redirection'] >= 1, true);
+/* ★転送は自分で GET で追う。追従を任せると POST のまま転送先を叩き、
+     転送先は POST を受け付けず 400 を返す。 */
+t('転送の追従を任せない', $sent[0]['args']['redirection'], 0);
 
 /* --- 4. 失敗の伝え方 --- */
 $GLOBALS['FAKE_POST_RESPONSE'] = array('code' => 200, 'body' => '{"ok":false,"error":"secret"}');
@@ -131,6 +133,48 @@ t('送ったあと continue しない',   strpos($body_src, 'continue') === fals
 /* --- 8. 設定画面に連携タブがある --- */
 $GLOBALS['FAKE_IS_ADMIN'] = true;
 ob_start(); eaf_settings_page(); $page = ob_get_clean();
+/* --- 転送を GET で追う --- */
+/* ★GASのウェブアプリは、処理を終えたあと別ドメインへ転送して返事を渡す。
+     転送先は POST を受け付けず 400 を返す。追従を任せると
+     「シートには行が入っているのに転記できませんと記録される」状態になる。
+     2026-11-11 実測：接続テストでシートの行は49→50に増え、同時に HTTP 400 が記録された。 */
+$o = get_option(EAF_OPT, array());
+$o['sheet_url'] = 'https://script.google.com/macros/s/XXXX/exec';
+update_option(EAF_OPT, $o);
+
+$GLOBALS['FAKE_HTTP_LOG'] = array();
+$GLOBALS['FAKE_POSTS'] = array();
+$GLOBALS['FAKE_POST_RESPONSE'] = array(
+    'code' => 302, 'body' => '',
+    'headers' => array('Location' => 'https://script.googleusercontent.com/echo?x=1'),
+);
+$GLOBALS['FAKE_HTTP'] = array(
+    'https://script.googleusercontent.com/echo?x=1' => array('code' => 200, 'body' => '{"ok":true}'),
+);
+$r = eaf_sheet_send(array('secret' => '', 'id' => 1));
+t('転送されても成功として扱う', $r, true);
+t('転送先は GET で取りにいく',
+  (count($GLOBALS['FAKE_HTTP_LOG']) === 1 && $GLOBALS['FAKE_HTTP_LOG'][0]['method'] === 'GET'), true);
+t('転送先の宛先が合っている',
+  $GLOBALS['FAKE_HTTP_LOG'][0]['url'], 'https://script.googleusercontent.com/echo?x=1');
+t('POST は1回だけ', count($GLOBALS['FAKE_POSTS']), 1);
+t('追従を任せていない',
+  isset($GLOBALS['FAKE_POSTS'][0]['args']['redirection']) ? $GLOBALS['FAKE_POSTS'][0]['args']['redirection'] : -1, 0);
+
+/* 転送が続いても、いつかは止まる */
+$GLOBALS['FAKE_HTTP_LOG'] = array();
+$GLOBALS['FAKE_HTTP'] = array(
+    'https://a.test/1' => array('code' => 302, 'body' => '', 'headers' => array('Location' => 'https://a.test/1')),
+);
+$GLOBALS['FAKE_POST_RESPONSE'] = array(
+    'code' => 302, 'body' => '', 'headers' => array('Location' => 'https://a.test/1'),
+);
+$r = eaf_sheet_send(array('secret' => '', 'id' => 2));
+t('転送が堂々巪りでも止まる', count($GLOBALS['FAKE_HTTP_LOG']) <= 5, true);
+t('止まったあとは理由を返す', is_string($r), true);
+
+unset($GLOBALS['FAKE_POST_RESPONSE'], $GLOBALS['FAKE_HTTP']);
+
 t('連携タブがある',   strpos($page, 'data-tab="link"') !== false, true);
 t('タブ名が「連携」', strpos($page, '>連携</a>') !== false, true);
 t('接続テストがある', strpos($page, 'action=eaf_sheet_test') !== false, true);

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.14.1
+ * Version: 1.14.2
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.14.1');
+define('EAF_VER', '1.14.2');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1549,6 +1549,17 @@ function eaf_settings_page() {
                            onclick="return confirm('いまの内容で、通知先メールにまとめを送ります。よろしいですか？')">いま送って試す</a>
                         <span class="description">保存してから押してください。</span>
                     </p>
+<?php $eaf_wl = eaf_weekly_last(); if ($eaf_wl): ?>
+                    <p class="description" style="margin-top:8px">
+                        前回送ったのは <strong><?php echo esc_html($eaf_wl['at']); ?></strong>（<?php echo (int) $eaf_wl['count']; ?>件）です。
+<?php if (!empty($eaf_wl['failed'])): ?>
+                        <br><span style="color:#b32d2e"><strong>送れなかった宛先：</strong>
+                        <?php echo esc_html(implode(', ', (array) $eaf_wl['failed'])); ?></span>
+<?php else: ?>
+                        すべての宛先に送れています。
+<?php endif; ?>
+                    </p>
+<?php endif; ?>
                 </td></tr>
                 <tr><th>フォーム冒頭の案内文</th><td>
                     <textarea name="<?php echo EAF_OPT; ?>[lead_text]" rows="3" style="width:100%;max-width:760px"><?php echo esc_textarea(eaf_opt('lead_text')); ?></textarea>
@@ -3787,9 +3798,25 @@ function eaf_send_weekly_digest() {
           . date('n/j', $now - 7 * DAY_IN_SECONDS) . '〜' . date('n/j', $now) . '）';
     $body = eaf_weekly_body($rows, $now);
     $headers = eaf_mail_headers();
-    /* 反響の通知と同じく、1人に1通ずつ送る */
-    foreach (eaf_notify_list() as $to) wp_mail($to, $subj, $body, $headers);
+    /* 反響の通知と同じく、1人に1通ずつ送る。
+       ★送れなかった宛先は控えておく。何も残さないと、
+         「土曜なのに届かない」とき、送っていないのか届いていないのかが分からない。 */
+    $ng = array();
+    foreach (eaf_notify_list() as $to) {
+        if (!wp_mail($to, $subj, $body, $headers)) $ng[] = $to;
+    }
+    update_option('eaf_weekly_last', array(
+        'at'     => current_time('mysql'),
+        'count'  => count($rows),
+        'failed' => $ng,
+    ), 'no');
     return count($rows);
+}
+
+/** 前回の週まとめの結果（設定画面と確認用） */
+function eaf_weekly_last() {
+    $v = get_option('eaf_weekly_last');
+    return is_array($v) ? $v : array();
 }
 
 /* 設定画面の「いま送って試す」ボタン */
@@ -4069,17 +4096,12 @@ function eaf_sheet_test() {
  * ★受け側のスクリプトが古いと action=reset を知らないため、
  *   中身が消えずに追記され、かえって増える。先に貼り直してもらう。
  */
-add_action('admin_post_eaf_sheet_rebuild', 'eaf_sheet_rebuild');
-function eaf_sheet_rebuild() {
-    if (!current_user_can('manage_options')) wp_die('権限がありません');
-    check_admin_referer('eaf_sheet_rebuild');
-
-    /* 入れ直したくないID（動作確認で入れた行など） */
-    $skip = array();
-    foreach (explode(',', (string) (isset($_POST['skip']) ? $_POST['skip'] : '')) as $v) {
-        $v = trim($v);
-        if ($v !== '' && ctype_digit($v)) $skip[] = (int) $v;
-    }
+/**
+ * 作り直しの中身。画面のボタンと REST の両方から呼ぶ。
+ * 返り値は array('reset'=>bool, 'sent'=>int, 'skipped'=>int, 'failed'=>int, 'error'=>string)
+ */
+function eaf_sheet_rebuild_run($skip = array()) {
+    $out = array('reset' => false, 'sent' => 0, 'skipped' => 0, 'failed' => 0, 'error' => '');
 
     $r = eaf_sheet_send(array(
         'secret' => (string) eaf_opt('sheet_secret', ''),
@@ -4087,23 +4109,82 @@ function eaf_sheet_rebuild() {
     ));
     if ($r !== true) {
         eaf_sheet_error($r);
-        wp_safe_redirect(admin_url('admin.php?page=eamber-form&rebuild=ng'));
-        exit;
+        $out['error'] = is_string($r) ? $r : '中身を消せませんでした。';
+        return $out;
     }
+    $out['reset'] = true;
 
     global $wpdb;
     $t = $wpdb->prefix . 'eamber_form_leads';
     $rows = $wpdb->get_results("SELECT * FROM `$t` ORDER BY id ASC", ARRAY_A);
-    $ok = 0; $ng = 0; $sk = 0;
     foreach ((array) $rows as $row) {
-        if (in_array((int) $row['id'], $skip, true)) { $sk++; continue; }
-        if (eaf_sheet_send_row($row) === true) $ok++;
-        else { $ng++; break; }   // 1件失敗したら以降も同じ理由で失敗する
+        if (in_array((int) $row['id'], $skip, true)) { $out['skipped']++; continue; }
+        $r = eaf_sheet_send_row($row);
+        if ($r === true) { $out['sent']++; continue; }
+        /* ★1件失敗したら以降も同じ理由で失敗する。無駄打ちせず理由を持ち帰る */
+        $out['failed']++;
+        $out['error'] = is_string($r) ? $r : '送れませんでした。';
+        break;
+    }
+    return $out;
+}
+
+/** 「0,7」のような書き方を、数の並びに直す */
+function eaf_parse_id_list($raw) {
+    $ids = array();
+    foreach (explode(',', (string) $raw) as $v) {
+        $v = trim($v);
+        if ($v !== '' && ctype_digit($v)) $ids[] = (int) $v;
+    }
+    return $ids;
+}
+
+add_action('admin_post_eaf_sheet_rebuild', 'eaf_sheet_rebuild');
+function eaf_sheet_rebuild() {
+    if (!current_user_can('manage_options')) wp_die('権限がありません');
+    check_admin_referer('eaf_sheet_rebuild');
+    $skip = eaf_parse_id_list(isset($_POST['skip']) ? $_POST['skip'] : '');
+    $r = eaf_sheet_rebuild_run($skip);
+    if (!$r['reset']) {
+        wp_safe_redirect(admin_url('admin.php?page=eamber-form&rebuild=ng'));
+        exit;
     }
     wp_safe_redirect(admin_url('admin.php?page=eamber-form&rebuild=ok'
-        . '&rbok=' . $ok . '&rbng=' . $ng . '&rbskip=' . $sk));
+        . '&rbok=' . $r['sent'] . '&rbng=' . $r['failed'] . '&rbskip=' . $r['skipped']));
     exit;
 }
+
+/**
+ * 同じ作り直しを REST からも実行できるようにする。
+ * ★管理画面を開けない場所からも直せるようにしておく。権限は画面と同じ管理者のみ。
+ *   POST /wp-json/eaf/v1/sheet-rebuild   {"skip": "0,7"}
+ */
+add_action('rest_api_init', function () {
+    register_rest_route('eaf/v1', '/sheet-rebuild', array(
+        'methods'             => 'POST',
+        'permission_callback' => function () { return current_user_can('manage_options'); },
+        'callback'            => function ($req) {
+            $r = eaf_sheet_rebuild_run(eaf_parse_id_list($req->get_param('skip')));
+            return rest_ensure_response($r);
+        },
+    ));
+    /* 保存してある反響の件数と、転記できていない数（状態の確認用） */
+    register_rest_route('eaf/v1', '/sheet-status', array(
+        'methods'             => 'GET',
+        'permission_callback' => function () { return current_user_can('manage_options'); },
+        'callback'            => function () {
+            global $wpdb;
+            $t = $wpdb->prefix . 'eamber_form_leads';
+            return rest_ensure_response(array(
+                'leads'   => (int) $wpdb->get_var("SELECT COUNT(*) FROM `$t`"),
+                'unsent'  => eaf_sheet_unsent_count(),
+                'error'   => (string) get_option('eaf_sheet_last_error'),
+                'weekly'  => eaf_weekly_last(),
+                'version' => EAF_VER,
+            ));
+        },
+    ));
+});
 
 add_action('admin_post_eaf_sheet_resend', 'eaf_sheet_resend');
 function eaf_sheet_resend() {

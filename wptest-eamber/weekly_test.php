@@ -101,7 +101,24 @@ t('曜日つきの日時', preg_match('/\d+月\d+日\([日月火水木金土]\)/
 t('反響一覧への案内', strpos($body, '反響一覧') !== false, true);
 t('範囲外は載せない', strpos($body, '範囲外 太郎') !== false, false);
 
-echo "\n--- 5. 指定の曜日・時刻にだけ送る ---\n";
+echo "\n--- 5. 送れたかどうかが後から分かる ---\n";
+/* ★何も残さないと、「土曜なのに届かない」ときに
+     送っていないのか、送ったが届いていないのかが判別できない。 */
+$w = eaf_weekly_last();
+t('前回送った時刻が残る', isset($w['at']) && $w['at'] !== '', true);
+t('件数も残る',             isset($w['count']) ? $w['count'] : -1, 2);
+t('全部送れたときは空',   isset($w['failed']) ? $w['failed'] : null, array());
+
+/* 送れなかったときは、その宛先が残る */
+$GLOBALS['FAKE_MAIL_OK'] = false;
+mails_clear();
+eaf_send_weekly_digest();
+$w = eaf_weekly_last();
+t('送れなかった宛先が残る', count($w['failed']), 2);
+t('どの宛先か分かる',       in_array('a@example.test', $w['failed'], true), true);
+$GLOBALS['FAKE_MAIL_OK'] = true;
+
+echo "\n--- 6. 指定の曜日・時刻にだけ送る ---\n";
 /* いまは水曜。月曜指定なので送られない */
 delete_option('eaf_weekly_sent_date');
 mails_clear();
@@ -135,7 +152,7 @@ mails_clear();
 eaf_weekly_cron();
 t('OFFなら送らない', count(mails()), 0);
 
-echo "\n--- 6. 設定は範囲の中に収める ---\n";
+echo "\n--- 7. 設定は範囲の中に収める ---\n";
 /* ★範囲外の値が入ると、見回りの条件に永久に当たらず
      「設定したのに一度も届かない」状態になる。 */
 $v = eaf_sanitize_options(array('weekly_day' => '9', 'weekly_hour' => '99'));
@@ -147,7 +164,7 @@ t('時刻は0から', $v['weekly_hour'], '0');
 $v = eaf_sanitize_options(array('weekly_on' => '1', 'weekly_day' => '5', 'weekly_hour' => '17'));
 t('選んだ値は残る', $v['weekly_day'] . '/' . $v['weekly_hour'] . '/' . $v['weekly_on'], '5/17/1');
 
-echo "\n--- 7. 設定画面に出ている ---\n";
+echo "\n--- 8. 設定画面に出ている ---\n";
 $GLOBALS['FAKE_IS_ADMIN'] = true;
 ob_start(); eaf_settings_page(); $page = ob_get_clean();
 $GLOBALS['FAKE_IS_ADMIN'] = false;
@@ -157,7 +174,7 @@ t('時刻を選べる',         strpos($page, 'weekly_hour') !== false, true);
 t('0件の週は送らないと書いてある', strpos($page, '1件も届かなかった週は送りません') !== false, true);
 t('いま送って試せる',     strpos($page, 'eaf_send_weekly') !== false, true);
 
-echo "\n--- 8. 自己診断 ---\n";
+echo "\n--- 9. 自己診断 ---\n";
 t('自己診断: メールを数えられている', is_array(mails()), true);
 t('自己診断: 時刻を動かせている', date('Y-m-d', current_time('timestamp')), '2026-11-09');
 

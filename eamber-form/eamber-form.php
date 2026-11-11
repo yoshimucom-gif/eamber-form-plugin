@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.13.4
+ * Version: 1.14.0
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.13.4');
+define('EAF_VER', '1.14.0');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -762,6 +762,12 @@ function eaf_sanitize_options($in) {
         'privacy_url'      => esc_url_raw($in['privacy_url'] ?? ''),
         // チェックボックス（未送信＝OFF。'' ではなく明示的に '0' を入れて区別する）
         'notify_on'        => !empty($in['notify_on'])      ? '1' : '0',
+        /* 週に1度のまとめ。曜日は 0=日曜 〜 6=土曜、時刻は 0〜23。
+           ★許可する値をここで絞る。範囲外が入ると、見回りの条件に
+             永久に当たらず「設定したのに一度も届かない」状態になる。 */
+        'weekly_on'        => !empty($in['weekly_on'])      ? '1' : '0',
+        'weekly_day'       => (string) max(0, min(6,  (int) ($in['weekly_day']  ?? 1))),
+        'weekly_hour'      => (string) max(0, min(23, (int) ($in['weekly_hour'] ?? 9))),
         // フォーム上に問い合わせ先（電話番号）を出すか。既定はOFF
         'step_form'        => !empty($in['step_form'])      ? '1' : '0',
         /* ★フォームに出る文言の出し分け。空欄にして消すのではなく、
@@ -1397,6 +1403,15 @@ function eaf_settings_page() {
     </style>
     <div class="wrap">
         <h1>電気工事反響フォーム 設定</h1>
+<?php
+        if (isset($_GET['weekly'])) {
+            $wn = intval($_GET['weekly']);
+            echo '<div class="notice notice-' . ($wn ? 'success' : 'warning') . '"><p>'
+               . ($wn ? '<strong>まとめを送りました。</strong>直近7日間の ' . $wn . ' 件を載せています。'
+                      : '<strong>直近7日間にお問い合わせがありません。</strong>この場合は送りません。')
+               . '</p></div>';
+        }
+?>
         <?php if (isset($_GET['testmail'])) {
             $tm_ok = ($_GET['testmail'] === '1');
             $tm_to = (string) get_option('eaf_last_test_to', '');
@@ -1507,6 +1522,34 @@ function eaf_settings_page() {
                         <br><strong>いまは <?php echo count($eaf_nt); ?> 件の宛先に送ります。</strong>
 <?php endif; ?>
                     </p></td></tr>
+                <tr><th>週に1度のまとめ</th><td>
+                    <label><input type="checkbox" name="<?php echo EAF_OPT; ?>[weekly_on]" value="1" <?php checked(eaf_flag('weekly_on', false)); ?>> その週に届いたお問い合わせを、まとめて送る</label>
+                    <p style="margin:10px 0 0">
+                        <select name="<?php echo EAF_OPT; ?>[weekly_day]">
+<?php foreach (array('日', '月', '火', '水', '木', '金', '土') as $wi => $wl): ?>
+                            <option value="<?php echo $wi; ?>" <?php selected((int) eaf_opt('weekly_day', '1'), $wi); ?>><?php echo $wl; ?>曜日</option>
+<?php endforeach; ?>
+                        </select>
+                        の
+                        <select name="<?php echo EAF_OPT; ?>[weekly_hour]">
+<?php for ($h = 0; $h < 24; $h++): ?>
+                            <option value="<?php echo $h; ?>" <?php selected((int) eaf_opt('weekly_hour', '9'), $h); ?>><?php echo $h; ?>時</option>
+<?php endfor; ?>
+                        </select>
+                        ごろに送る
+                    </p>
+                    <p class="description">
+                        過去7日間に届いたお問い合わせを、お名前・工事内容・電話番号つきの一覧にして送ります。<br>
+                        <strong>1件も届かなかった週は送りません。</strong>対応漏れの振り返りにお使いください。<br>
+                        届け先は上の「通知先メール」と同じで、お一人ずつ別々に送ります。<br>
+                        WordPressの定期実行は、誰かがサイトを開いたときに動く仕組みです。指定の時刻きっかりではなく、少し遅れて届くことがあります。
+                    </p>
+                    <p style="margin-top:10px">
+                        <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=eaf_send_weekly'), 'eaf_send_weekly')); ?>"
+                           onclick="return confirm('いまの内容で、通知先メールにまとめを送ります。よろしいですか？')">いま送って試す</a>
+                        <span class="description">保存してから押してください。</span>
+                    </p>
+                </td></tr>
                 <tr><th>フォーム冒頭の案内文</th><td>
                     <textarea name="<?php echo EAF_OPT; ?>[lead_text]" rows="3" style="width:100%;max-width:760px"><?php echo esc_textarea(eaf_opt('lead_text')); ?></textarea>
                     <label style="display:inline-block;margin-top:8px"><input type="checkbox" name="<?php echo EAF_OPT; ?>[show_lead]" value="1" <?php checked(eaf_flag('show_lead', true)); ?>> この案内文を出す</label>
@@ -1824,6 +1867,21 @@ function eaf_settings_page() {
                           : '転記できませんでした。下の「直近のエラー」を確認してください。')
                    . '</p></div>';
             }
+            if (isset($_GET['rebuild'])) {
+                if ($_GET['rebuild'] === 'ok') {
+                    echo '<div class="notice notice-success"><p>'
+                       . '<strong>スプレッドシートを作り直しました。</strong>'
+                       . intval($_GET['rbok']) . ' 件を入れ直しました。'
+                       . (intval($_GET['rbskip']) ? '（' . intval($_GET['rbskip']) . ' 件は除きました）' : '')
+                       . (intval($_GET['rbng']) ? '途中で失敗したため中断しています。下の「直近のエラー」をご確認ください。' : '')
+                       . '</p></div>';
+                } else {
+                    echo '<div class="notice notice-error"><p>'
+                       . '<strong>中身を消せませんでした。</strong>'
+                       . 'スクリプトが古いままの可能性があります。上のスクリプトを貼り直して、'
+                       . 'デプロイし直してからもう一度お試しください。</p></div>';
+                }
+            }
             if (isset($_GET['resent'])) {
                 echo '<div class="notice notice-info"><p>'
                    . intval($_GET['resent']) . ' 件を送り直しました。'
@@ -1905,6 +1963,24 @@ function eaf_settings_page() {
                     　<a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=eaf_sheet_resend'), 'eaf_sheet_resend')); ?>">まとめて送る（最大50件）</a>
 <?php endif; ?>
                     <p class="description">転記できていない反響の数です。WordPress側には残っているので失われていません。</p>
+                </td></tr>
+                <tr><th>作り直す</th><td>
+                    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"
+                          onsubmit="return confirm('スプレッドシートの中身をすべて消して、保存してある反響を入れ直します。よろしいですか？')">
+                        <input type="hidden" name="action" value="eaf_sheet_rebuild">
+                        <?php wp_nonce_field('eaf_sheet_rebuild'); ?>
+                        入れ直さないID
+                        <input type="text" name="skip" size="18" placeholder="例：0,7" style="margin:0 8px">
+                        <button type="submit" class="button">中身を消して入れ直す</button>
+                    </form>
+                    <p class="description">
+                        <strong>同じ反響が2行ずつ並んでしまったときに使います。</strong>
+                        スプレッドシートの中身をすべて消したうえで、WordPressに保存してある反響を古い順に入れ直します。
+                        WordPress側の反響は消えません。<br>
+                        動作確認で入れた行を省きたいときは、反響一覧のIDをカンマ区切りで書いてください。<br>
+                        <strong>先に上のスクリプトを貼り直して、デプロイし直しておいてください。</strong>
+                        古いスクリプトのままだと中身が消えず、かえって増えます。
+                    </p>
                 </td></tr>
                 <tr><th>直近のエラー</th><td>
                     <?php echo $sheet_err ? '<code>' . esc_html($sheet_err) . '</code>' : '<span class="description">ありません。</span>'; ?>
@@ -2601,10 +2677,7 @@ function eaf_ajax() {
     );
 
     // 受付完了メール（お客様へ）。メール未入力なら送らない（折り返しは電話で行う）
-    $site = eaf_opt('site_name', '株式会社e.Amber');
-    $from = eaf_from_address();
-    $headers = array('Content-Type: text/plain; charset=UTF-8');
-    if ($from) $headers[] = 'From: ' . $site . ' <' . $from . '>';
+    $headers = eaf_mail_headers();
     $mail_ok = ($email !== '') ? wp_mail($email, eaf_mail_subject(), eaf_mail_body($ctx), $headers) : false;
 
     // 担当者通知
@@ -3497,23 +3570,49 @@ function eaf_sheet_gas_code() {
         "",
         "const SECRET = " . wp_json_encode($secret) . ";",
         "",
+        "// ★列は固定。フォームで項目を出す/隠すを切り替えても列はずれない。",
+        "//   隠している項目はその列が空になるだけ。",
+        "const HEAD = ['受付日時','工事内容','市町村','丁目・番地・建物名','会社名','お名前','フリガナ','電話番号','メール',",
+        "              '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
+        "              'ご相談内容','詳細','送信元ページ','ID'];",
+        "const ID_COL = HEAD.length;   // ID は右端の列",
+        "",
         "function doPost(e) {",
         "  try {",
         "    const data = JSON.parse(e.postData.contents);",
         "    if (SECRET && data.secret !== SECRET) return out({ ok: false, error: 'secret' });",
         "    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];",
-        "    if (sh.getLastRow() === 0) {",
-        "      sh.appendRow(['受付日時','工事内容','市町村','丁目・番地・建物名','会社名','お名前','フリガナ','電話番号','メール',",
-        "                    '連絡希望時間帯','建物の種類','持ち家/賃貸','希望時期',",
-        "                    'ご相談内容','詳細','送信元ページ','ID']);",
+        "",
+        "    // 作り直し：見出しごと消して、見出しだけ書き戻す",
+        "    if (data.action === 'reset') {",
+        "      sh.clear();",
+        "      sh.appendRow(HEAD);",
+        "      return out({ ok: true, reset: true });",
         "    }",
-        "    // ★列は固定。フォームで項目を出す/隠すを切り替えても列はずれない。",
-        "    //   隠している項目はその列が空になるだけ。",
-        "    sh.appendRow([",
+        "",
+        "    if (sh.getLastRow() === 0) sh.appendRow(HEAD);",
+        "    else sh.getRange(1, 1, 1, HEAD.length).setValues([HEAD]);   // 見出しは常に最新に揃える",
+        "",
+        "    const row = [",
         "      data.created_at, data.ptype, data.address, data.address_detail, data.company, data.name, data.kana, data.tel, data.email,",
         "      data.contact_time, data.building, data.ownership, data.timing,",
         "      data.detail, data.details, data.page_url, data.id",
-        "    ]);",
+        "    ];",
+        "",
+        "    // ★同じIDが既にあれば、足さずに書き換える。",
+        "    //   通信のやり直しや送り直しでも、1件が必ず1行になる。",
+        "    const id = String(data.id === undefined || data.id === null ? '' : data.id);",
+        "    const last = sh.getLastRow();",
+        "    if (id !== '' && last > 1) {",
+        "      const ids = sh.getRange(2, ID_COL, last - 1, 1).getValues();",
+        "      for (let i = 0; i < ids.length; i++) {",
+        "        if (String(ids[i][0]) === id) {",
+        "          sh.getRange(i + 2, 1, 1, row.length).setValues([row]);",
+        "          return out({ ok: true, updated: true });",
+        "        }",
+        "      }",
+        "    }",
+        "    sh.appendRow(row);",
         "    return out({ ok: true });",
         "  } catch (err) {",
         "    return out({ ok: false, error: String(err) });",
@@ -3585,6 +3684,124 @@ function eaf_sanitize_email_list($raw) {
 }
 
 /** 通知先を配列で返す（未設定なら差出人→管理者アドレスの順に落とす） */
+/* =========================================================================
+ * 週まとめメール（その週に届いたお問い合わせの振り返り）
+ * ======================================================================= */
+
+/**
+ * 毎時の見回りを仕掛ける。
+ *
+ * ★WordPressの定期実行は、時計で動くのではなく「誰かがサイトを開いたとき」に
+ *   動く。指定の時刻ちょうどに実行される保証はない。そのため
+ *   「毎時見回って、条件に合えば送る」形にしておく。多少遅れても必ず1回は届く。
+ * ★有効化のときだけ仕掛けると、更新で入れ替わったサイトに仕掛けが残らない。
+ *   毎回 init で有無を見て、無ければ仕掛け直す。
+ */
+add_action('init', 'eaf_schedule_hourly');
+function eaf_schedule_hourly() {
+    if (!wp_next_scheduled('eaf_hourly')) wp_schedule_event(time() + 60, 'hourly', 'eaf_hourly');
+}
+register_deactivation_hook(__FILE__, 'eaf_unschedule_hourly');
+function eaf_unschedule_hourly() {
+    $ts = wp_next_scheduled('eaf_hourly');
+    if ($ts) wp_unschedule_event($ts, 'eaf_hourly');
+}
+
+add_action('eaf_hourly', 'eaf_weekly_cron');
+function eaf_weekly_cron() {
+    if (!eaf_flag('weekly_on', false)) return;
+    $now = current_time('timestamp');
+    if ((int) date('w', $now) !== (int) eaf_opt('weekly_day', '1'))  return;
+    if ((int) date('G', $now) <   (int) eaf_opt('weekly_hour', '9')) return;
+    /* ★同じ日に二度送らない。見回りは毎時走るので、この歯止めが無いと
+         指定時刻から日付が変わるまで毎時届く。 */
+    if (get_option('eaf_weekly_sent_date') === date('Y-m-d', $now)) return;
+    update_option('eaf_weekly_sent_date', date('Y-m-d', $now));
+    eaf_send_weekly_digest();
+}
+
+/** 直近7日間に届いた反響 */
+function eaf_weekly_leads($now = null) {
+    global $wpdb;
+    if ($now === null) $now = current_time('timestamp');
+    $t = $wpdb->prefix . 'eamber_form_leads';
+    if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $t)) !== $t) return array();
+    $from = date('Y-m-d H:i:s', $now - 7 * DAY_IN_SECONDS);
+    $rows = $wpdb->get_results($wpdb->prepare(
+        "SELECT * FROM $t WHERE created_at >= %s ORDER BY id ASC", $from));
+    return is_array($rows) ? $rows : array();
+}
+
+/** 「11月6日(木) 14:22」の形にする */
+function eaf_weekly_when($mysql_time) {
+    $ts = strtotime((string) $mysql_time);
+    if (!$ts) return (string) $mysql_time;
+    $w = array('日', '月', '火', '水', '木', '金', '土');
+    return date('n月j日', $ts) . '(' . $w[(int) date('w', $ts)] . ') ' . date('H:i', $ts);
+}
+
+/** まとめメールの本文 */
+function eaf_weekly_body($rows, $now = null) {
+    if ($now === null) $now = current_time('timestamp');
+    $from = $now - 7 * DAY_IN_SECONDS;
+    $b  = '今週（' . date('n月j日', $from) . '〜' . date('n月j日', $now) . '）に届いた'
+        . 'お問い合わせは' . count($rows) . '件です。' . "\n";
+    $i = 0;
+    foreach ($rows as $r) {
+        $i++;
+        $plabel = isset($GLOBALS['EAF_PTYPE_LABEL'][$r->ptype])
+            ? $GLOBALS['EAF_PTYPE_LABEL'][$r->ptype] : (string) $r->ptype;
+        $b .= "\n───────────────\n";
+        $b .= $i . '. ' . eaf_weekly_when($r->created_at) . "\n";
+        $name = isset($r->name) ? (string) $r->name : '';
+        $co   = isset($r->company) ? (string) $r->company : '';
+        $addr = isset($r->address) ? (string) $r->address : '';
+        $line = ($co !== '' ? $co . ' ' : '') . ($name !== '' ? $name . ' 様' : 'お名前なし');
+        if ($addr !== '') $line .= ' / ' . $addr;
+        $b .= '　' . $line . "\n";
+        $b .= '　' . $plabel . "\n";
+        /* ★折り返しの連絡先は、まとめでも必ず出す。
+             一覧を開かずに、このメールだけで電話をかけられるようにする。 */
+        $tel = isset($r->tel) ? (string) $r->tel : '';
+        $em  = isset($r->email) ? (string) $r->email : '';
+        if ($tel !== '') $b .= '　' . $tel . "\n";
+        if ($em  !== '') $b .= '　' . $em . "\n";
+    }
+    $b .= "───────────────\n";
+    $b .= "\nくわしい内容は、管理画面の「電気工事反響フォーム → 反響一覧」で見られます。\n";
+    $b .= admin_url('admin.php?page=eamber-form-leads') . "\n";
+    return $b;
+}
+
+/**
+ * まとめを送る。送った件数を返す（0件なら送らずに 0 を返す）。
+ *
+ * ★1件も届かなかった週は送らない。届かなかったことを毎週知らせても
+ *   読まれなくなるだけで、肝心の「届いた週」のメールまで見過ごされる。
+ */
+function eaf_send_weekly_digest() {
+    $rows = eaf_weekly_leads();
+    if (!$rows) return 0;
+    $now  = current_time('timestamp');
+    $subj = '【今週のお問い合わせ】' . count($rows) . '件（'
+          . date('n/j', $now - 7 * DAY_IN_SECONDS) . '〜' . date('n/j', $now) . '）';
+    $body = eaf_weekly_body($rows, $now);
+    $headers = eaf_mail_headers();
+    /* 反響の通知と同じく、1人に1通ずつ送る */
+    foreach (eaf_notify_list() as $to) wp_mail($to, $subj, $body, $headers);
+    return count($rows);
+}
+
+/* 設定画面の「いま送って試す」ボタン */
+add_action('admin_post_eaf_send_weekly', 'eaf_send_weekly_now');
+function eaf_send_weekly_now() {
+    if (!current_user_can('manage_options')) wp_die('権限がありません');
+    check_admin_referer('eaf_send_weekly');
+    $n = eaf_send_weekly_digest();
+    wp_safe_redirect(admin_url('admin.php?page=eamber-form&weekly=' . $n));
+    exit;
+}
+
 function eaf_notify_list() {
     $raw = eaf_opt('notify_email', '');
     if ($raw === '') $raw = (string) get_option('admin_email');
@@ -3608,6 +3825,18 @@ function eaf_default_from_address() {
     $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
     $host = preg_replace('/^www\./i', '', $host);
     return $host !== '' ? 'wordpress@' . $host : '';
+}
+
+/**
+ * メールのヘッダー。
+ * ★本文は平文で送る。工事の見積もり依頼に装飾は要らないうえ、
+ *   HTMLメールは迷惑メール判定の材料が1つ増える。
+ */
+function eaf_mail_headers() {
+    $headers = array('Content-Type: text/plain; charset=UTF-8');
+    $from = eaf_from_address();
+    if ($from) $headers[] = 'From: ' . eaf_opt('site_name', '株式会社e.Amber') . ' <' . $from . '>';
+    return $headers;
 }
 
 /** 実際に差出人として使う住所（設定があればそれ、無ければ上の既定） */
@@ -3721,36 +3950,38 @@ function eaf_sheet_send($payload) {
              . 'いま入っているのは ' . eaf_trim_len($url, 60);
     }
     $json = wp_json_encode($payload);
-    $last = '';
-    foreach (array('text/plain;charset=utf-8', 'application/json; charset=utf-8') as $ctype) {
-        $res = wp_remote_post($url, array(
-            'timeout'     => 10,
-            'redirection' => 5,            // GASのウェブアプリは別ドメインへ転送される
-            'headers'     => array('Content-Type' => $ctype),
-            'body'        => $json,
-        ));
-        if (is_wp_error($res)) { $last = $res->get_error_message(); continue; }
-        $code = (int) wp_remote_retrieve_response_code($res);
-        $body = (string) wp_remote_retrieve_body($res);
-        if ($code === 200) {
-            $j = json_decode($body, true);
-            if (is_array($j) && empty($j['ok'])) {
-                $why = isset($j['error']) ? $j['error'] : '理由不明';
-                return ($why === 'secret')
-                    ? '合言葉が一致しません。連携タブの合言葉と、スクリプト1行目の SECRET をそろえてください（合言葉を変えたらスクリプトを貼り直します）。'
-                    : 'スクリプト側でエラー: ' . eaf_trim_len($why, 160);
-            }
-            if (!is_array($j)) {
-                /* 200だがJSONでない＝ログイン画面などが返っている */
-                $last = 'JSONが返りませんでした。' . eaf_trim_len(eaf_sheet_clean_error($body), 160);
-                continue;
-            }
-            return true;
-        }
-        $last = 'HTTP ' . $code . '（Content-Type: ' . $ctype . '）／'
-              . eaf_trim_len(eaf_sheet_clean_error($body), 160);
+    /* ★送信は必ず1回だけ。
+         以前は Content-Type を2通り試すループにしていたが、
+         1通目でスプレッドシートに行が追加されたあと、返ってきた中身が
+         JSONとして読めないと2通目を送っていた。受け側は2通とも受け取って
+         2行追加する。2026-11-11に実測したところ、転記された24件すべてが
+         2行ずつ並んでいた。送り直すなら、人が押したときだけにする。 */
+    $res = wp_remote_post($url, array(
+        'timeout'     => 15,
+        'redirection' => 5,            // GASのウェブアプリは別ドメインへ転送される
+        'headers'     => array('Content-Type' => 'text/plain;charset=utf-8'),
+        'body'        => $json,
+    ));
+    if (is_wp_error($res)) return $res->get_error_message();
+    $code = (int) wp_remote_retrieve_response_code($res);
+    $body = (string) wp_remote_retrieve_body($res);
+    if ($code !== 200) {
+        return 'HTTP ' . $code . '／' . eaf_trim_len(eaf_sheet_clean_error($body), 160);
     }
-    return $last;
+    $j = json_decode($body, true);
+    if (!is_array($j)) {
+        /* ★200だがJSONでない＝ログイン画面などが返っている。
+             このとき行が追加されている可能性があるので、自動では送り直さない。 */
+        return 'JSONが返りませんでした（公開設定をご確認ください）。'
+             . eaf_trim_len(eaf_sheet_clean_error($body), 160);
+    }
+    if (empty($j['ok'])) {
+        $why = isset($j['error']) ? $j['error'] : '理由不明';
+        return ($why === 'secret')
+            ? '合言葉が一致しません。連携タブの合言葉と、スクリプト1行目の SECRET をそろえてください（合言葉を変えたらスクリプトを貼り直します）。'
+            : 'スクリプト側でエラー: ' . eaf_trim_len($why, 160);
+    }
+    return true;
 }
 
 /**
@@ -3810,6 +4041,50 @@ function eaf_sheet_test() {
     if ($r === true) eaf_sheet_error('');
     else eaf_sheet_error($r);
     wp_safe_redirect(admin_url('admin.php?page=eamber-form&sheettest=' . ($r === true ? '1' : '0')));
+    exit;
+}
+
+/**
+ * スプレッドシートを作り直す。
+ *
+ * ★中身を消してから、WordPressに保存してある反響を古い順に入れ直す。
+ *   同じ反響が2行ずつ並んでしまったときの直し方。
+ * ★受け側のスクリプトが古いと action=reset を知らないため、
+ *   中身が消えずに追記され、かえって増える。先に貼り直してもらう。
+ */
+add_action('admin_post_eaf_sheet_rebuild', 'eaf_sheet_rebuild');
+function eaf_sheet_rebuild() {
+    if (!current_user_can('manage_options')) wp_die('権限がありません');
+    check_admin_referer('eaf_sheet_rebuild');
+
+    /* 入れ直したくないID（動作確認で入れた行など） */
+    $skip = array();
+    foreach (explode(',', (string) (isset($_POST['skip']) ? $_POST['skip'] : '')) as $v) {
+        $v = trim($v);
+        if ($v !== '' && ctype_digit($v)) $skip[] = (int) $v;
+    }
+
+    $r = eaf_sheet_send(array(
+        'secret' => (string) eaf_opt('sheet_secret', ''),
+        'action' => 'reset',
+    ));
+    if ($r !== true) {
+        eaf_sheet_error($r);
+        wp_safe_redirect(admin_url('admin.php?page=eamber-form&rebuild=ng'));
+        exit;
+    }
+
+    global $wpdb;
+    $t = $wpdb->prefix . 'eamber_form_leads';
+    $rows = $wpdb->get_results("SELECT * FROM `$t` ORDER BY id ASC", ARRAY_A);
+    $ok = 0; $ng = 0; $sk = 0;
+    foreach ((array) $rows as $row) {
+        if (in_array((int) $row['id'], $skip, true)) { $sk++; continue; }
+        if (eaf_sheet_send_row($row) === true) $ok++;
+        else { $ng++; break; }   // 1件失敗したら以降も同じ理由で失敗する
+    }
+    wp_safe_redirect(admin_url('admin.php?page=eamber-form&rebuild=ok'
+        . '&rbok=' . $ok . '&rbng=' . $ng . '&rbskip=' . $sk));
     exit;
 }
 

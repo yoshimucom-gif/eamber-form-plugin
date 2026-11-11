@@ -120,6 +120,21 @@ function fake_inline_script() { return $GLOBALS['FAKE_ASSETS']['js']; }
 function fake_assets_reset()  { $GLOBALS['FAKE_ASSETS'] = array('reg'=>array(),'enq'=>array(),'css'=>'','js'=>''); }
 
 function register_activation_hook($file, $cb) { $GLOBALS['FAKE_ACTIVATE'][] = $cb; }
+function register_deactivation_hook($file, $cb) { $GLOBALS['FAKE_DEACTIVATE'][] = $cb; }
+
+/* ---------------- 定期実行（WP-Cron） ---------------- */
+/* ★本番の WordPress は「誰かがサイトを開いたとき」に仕掛けを見て回す。
+     検査では「仕掛けてあるか」だけ分かればよいので、一覧を持つ。 */
+function fake_cron_reset() { $GLOBALS['FAKE_CRON'] = array(); }
+function wp_next_scheduled($hook) {
+    return isset($GLOBALS['FAKE_CRON'][$hook]) ? $GLOBALS['FAKE_CRON'][$hook] : false;
+}
+function wp_schedule_event($ts, $rec, $hook) {
+    if (!isset($GLOBALS['FAKE_CRON'])) $GLOBALS['FAKE_CRON'] = array();
+    $GLOBALS['FAKE_CRON'][$hook] = array('at' => $ts, 'every' => $rec);
+    return true;
+}
+function wp_unschedule_event($ts, $hook) { unset($GLOBALS['FAKE_CRON'][$hook]); return true; }
 function add_shortcode($tag, $cb) { $GLOBALS['FAKE_SHORTCODES'][$tag] = $cb; }
 function do_shortcode_call($tag, $atts = array()) { return call_user_func($GLOBALS['FAKE_SHORTCODES'][$tag], $atts); }
 function shortcode_atts($pairs, $atts, $sc = '') {
@@ -178,6 +193,7 @@ function check_admin_referer($action = '-1', $q = '_wpnonce') {
     return 1;
 }
 function wp_nonce_url($url, $a = -1) { return $url . (strpos($url, '?') !== false ? '&' : '?') . '_wpnonce=' . wp_create_nonce($a); }
+function wp_nonce_field($a = -1, $n = '_wpnonce', $ref = true, $echo = true) { $h = '<input type="hidden" name="' . $n . '" value="' . wp_create_nonce($a) . '">'; if ($echo) echo $h; return $h; }
 /**
  * 既定は管理者（既存テストの互換）。
  * $GLOBALS['FAKE_CAPS'] に配列を入れると、その権限だけを持つ利用者として振る舞う。
@@ -208,7 +224,13 @@ function plugin_basename($f) { return basename(dirname($f)) . '/' . basename($f)
 function plugin_dir_path($f) { return dirname($f) . '/'; }
 function wp_safe_redirect($u) { header('Location: ' . $u); echo "[redirect] $u"; }
 function nocache_headers() {}
-function current_time($t = 'mysql') { return date('Y-m-d H:i:s'); }
+/* ★週まとめは時刻で判断するので timestamp を返せないと検査できない。
+     検査から FAKE_NOW を入れれば、好きな曜日・時刻にして試せる。 */
+function current_time($t = 'mysql') {
+    $now = isset($GLOBALS['FAKE_NOW']) ? (int) $GLOBALS['FAKE_NOW'] : time();
+    if ($t === 'timestamp' || $t === 'U') return $now;
+    return date('Y-m-d H:i:s', $now);
+}
 
 /* ---------------- 固定ページ（査定ページの自動作成用） ---------------- */
 function wp_insert_post($args) {
@@ -365,11 +387,29 @@ class FakeWpdb {
     /** WHERE の単純な等値条件だけ拾う（この検証環境で使う範囲に限る） */
     private function apply_where($list, $sql) {
         if (!preg_match('/WHERE\s+(.+?)(?:\s+ORDER\s+BY|\s+LIMIT|$)/is', $sql, $w)) return $list;
-        if (!preg_match_all("/([a-zA-Z0-9_]+)\s*=\s*'?([^'\s]+)'?/", $w[1], $cs, PREG_SET_ORDER)) return $list;
+        /* ★ >= や <= も見る。日付で絞る問い合わせ（週まとめ）が
+             素通りすると、範囲外の行まで拾って検査が空振りする。
+             クオートの中は空白を含む（'2026-11-04 12:00:00'）ので別々に拾う。 */
+        $re = "/([a-zA-Z0-9_]+)\s*(>=|<=|<>|!=|=|>|<)\s*(?:'([^']*)'|([^\s'()]+))/";
+        if (!preg_match_all($re, $w[1], $cs, PREG_SET_ORDER)) return $list;
         foreach ($cs as $c) {
-            $k = $c[1]; $v = $c[2];
-            $list = array_values(array_filter($list, function ($r) use ($k, $v) {
-                return isset($r[$k]) && (string) $r[$k] === (string) $v;
+            $k  = $c[1];
+            $op = $c[2];
+            $v  = ($c[3] !== '' || isset($c[4]) === false) ? $c[3] : $c[4];
+            if ($v === '' && isset($c[4]) && $c[4] !== '') $v = $c[4];
+            $list = array_values(array_filter($list, function ($r) use ($k, $op, $v) {
+                if (!array_key_exists($k, $r)) return false;
+                $a = (string) $r[$k]; $b = (string) $v;
+                $cmp = strcmp($a, $b);
+                switch ($op) {
+                    case '>=': return $cmp >= 0;
+                    case '<=': return $cmp <= 0;
+                    case '>':  return $cmp >  0;
+                    case '<':  return $cmp <  0;
+                    case '<>':
+                    case '!=': return $a !== $b;
+                    default:   return $a === $b;
+                }
             }));
         }
         return $list;

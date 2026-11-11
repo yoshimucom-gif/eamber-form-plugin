@@ -104,14 +104,29 @@ foreach (array_keys(eaf_sheet_payload(array())) as $k) {
     t('スクリプトが ' . $k . ' を書いている', strpos($code, 'data.' . $k) !== false, true);
 }
 /* 列は固定＝項目の出し入れでずれない。見出しの数と書き込む値の数が一致すること */
-preg_match('/sh\.appendRow\(\[(.*?)\]\);\s*\}/s', $code, $h);
-preg_match('/sh\.appendRow\(\[\s*
-(.*?)
-\s*\]\);/s', $code, $v);
-$head_n = preg_match_all("/'[^']*'/", $h[1]);          // 見出しの個数
-$val_n  = preg_match_all('/data\.[a-z_]+/', $v[1]);    // 書き込む値の個数
+preg_match('/const HEAD = \[(.*?)\];/s', $code, $h);
+preg_match('/const row = \[(.*?)\];/s', $code, $v);
+$head_n = isset($h[1]) ? preg_match_all("/'[^']*'/", $h[1]) : 0;   // 見出しの個数
+$val_n  = isset($v[1]) ? preg_match_all('/data\.[a-z_]+/', $v[1]) : 0;   // 書き込む値の個数
 t('見出しの数と値の数が合う', $head_n, $val_n);
 t('列は17', $head_n, 17);
+
+/* --- 同じ反響が2行にならないこと --- */
+/* ★ 2026-11-11の実測：転記済み24件がすべて2行ずつ並んでいた。
+     送る側が Content-Type を2通り試しており、1通目で行が入ったあと、
+     返事がJSONとして読めないと2通目を送っていた。 */
+t('同じIDがあれば書き換える', strpos($code, 'setValues([row])') !== false, true);
+t('IDの列を見ている',       strpos($code, 'ID_COL') !== false, true);
+t('作り直しを受け付ける', strpos($code, "data.action === 'reset'") !== false, true);
+t('見出しを常に揃える',     strpos($code, 'setValues([HEAD])') !== false, true);
+
+/* 送る側：1回送って終わり（自動で送り直さない） */
+$php = file_get_contents(dirname(__DIR__) . '/eamber-form/eamber-form.php');
+preg_match('/function eaf_sheet_send\(\$payload\)(.*?)\n\}/s', $php, $fn);
+$body_src = isset($fn[1]) ? $fn[1] : '';
+t('送信はwp_remote_postを1回だけ', substr_count($body_src, 'wp_remote_post('), 1);
+t('Content-Typeを試すループが無い', strpos($body_src, 'foreach') === false, true);
+t('送ったあと continue しない',   strpos($body_src, 'continue') === false, true);
 
 /* --- 8. 設定画面に連携タブがある --- */
 $GLOBALS['FAKE_IS_ADMIN'] = true;

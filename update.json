@@ -1,6 +1,6 @@
 {
   "name": "e.Amber お問い合わせフォーム",
-  "version": "1.14.2",
+  "version": "1.14.3",
   "download_url": "https://raw.githubusercontent.com/yoshimucom-gif/eamber-form-plugin/main/eamber-form.zip",
   "requires": "5.8",
   "tested": "6.7",
@@ -8,6 +8,6 @@
   "author": "株式会社Keys",
   "homepage": "https://github.com/yoshimucom-gif/eamber-form-plugin",
   "sections": {
-    "changelog": "1.14.2\n週まとめの送信結果を控えるように／作り直しを離れた場所からも実行できるように"
+    "changelog": "1.14.3\nメール末尾の案内をスプレッドシートのリンクに"
   }
 }

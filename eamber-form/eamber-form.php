@@ -2,7 +2,7 @@
 /**
  * Plugin Name: e.Amber お問い合わせフォーム
  * Description: 電気工事の問い合わせフォーム。工事内容を選ぶと、その内容に合わせた質問に切り替わるステップ型フォームです。受付内容はDBに保存され、受付完了メールを自動返信＋担当者に通知します。入力項目は1つずつ「必須／任意／非表示」を選べます。ショートコード [eamber_form] をページに貼るだけ。
- * Version: 1.14.2
+ * Version: 1.14.3
  * Author: 株式会社Keys
  * License: GPLv2 or later
  * Text Domain: eamber-form
@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit; // 直接アクセス禁止
 
-define('EAF_VER', '1.14.2');
+define('EAF_VER', '1.14.3');
 define('EAF_OPT', 'eamber_form_options');
 
 /**
@@ -1275,7 +1275,7 @@ function eaf_admin_notify_body($ctx) {
         foreach ($to_list as $to) $b .= "・" . $to . "\n";
         $b .= "（同じ内容を、上のお一人ずつに別々に送っています）\n";
     }
-    $b .= "\n管理画面「電気工事反響フォーム → 反響一覧」からも確認できます。";
+    $b .= eaf_mail_footer_link();
     return $b;
 }
 
@@ -3779,8 +3779,7 @@ function eaf_weekly_body($rows, $now = null) {
         if ($em  !== '') $b .= '　' . $em . "\n";
     }
     $b .= "───────────────\n";
-    $b .= "\nくわしい内容は、管理画面の「電気工事反響フォーム → 反響一覧」で見られます。\n";
-    $b .= admin_url('admin.php?page=eamber-form-leads') . "\n";
+    $b .= eaf_mail_footer_link();
     return $b;
 }
 
@@ -3852,6 +3851,22 @@ function eaf_default_from_address() {
     $host = (string) wp_parse_url(home_url(), PHP_URL_HOST);
     $host = preg_replace('/^www\./i', '', $host);
     return $host !== '' ? 'wordpress@' . $host : '';
+}
+
+/**
+ * メールの末尾に置く「どこで見られるか」の案内。
+ *
+ * ★スプレッドシートを使っているなら、そのまま開けるリンクを出す。
+ *   管理画面にログインしてタブを辿るより早い。
+ *   設定していないサイトでは、今まで通り管理画面を案内する。
+ */
+function eaf_mail_footer_link() {
+    $view = eaf_opt('sheet_view_url', '');
+    if ($view !== '') {
+        return "\n反響の一覧はこちらで見られます。\n" . $view . "\n";
+    }
+    return "\nくわしい内容は、管理画面の「電気工事反響フォーム → 反響一覧」で見られます。\n"
+         . admin_url('admin.php?page=eamber-form-leads') . "\n";
 }
 
 /**
